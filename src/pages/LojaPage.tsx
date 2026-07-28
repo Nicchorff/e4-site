@@ -26,7 +26,7 @@ export function LojaPage() {
   return (
     <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="mb-4 rounded-md border border-e4-gold/40 bg-e4-gold/10 px-4 py-2 text-center font-mono text-xs text-e4-gold sm:text-sm">
-        Pagamentos via Stripe · produtos digitais para o servidor E4
+        Pagamento via ticket Discord (temporário) · produtos digitais E4
       </div>
 
       <header className="mb-8 max-w-2xl">
@@ -35,8 +35,8 @@ export function LojaPage() {
           Fortaleça seu personagem
         </h1>
         <p className="mt-3 text-e4-silver">
-          Escolha uma categoria. O catálogo é gerenciado no site; o pagamento é
-          processado pela Stripe.
+          Escolha uma categoria. No carrinho, abra um ticket no Discord e envie
+          o comprovante para a staff aprovar.
         </p>
       </header>
 

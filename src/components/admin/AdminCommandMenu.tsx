@@ -4,6 +4,7 @@ import {
   MessageSquareQuote,
   Package,
   ScrollText,
+  Ticket,
   Users,
 } from 'lucide-react'
 import { CommandMenu } from '@/components/unlumen-ui/command-menu'
@@ -34,7 +35,13 @@ const adminGroups = [
         label: 'Loja',
         href: '/admin/loja',
         icon: Package,
-        keywords: ['produtos', 'destaques', 'stripe'],
+        keywords: ['produtos', 'destaques', 'catalogo'],
+      },
+      {
+        label: 'Doações',
+        href: '/admin/doacoes',
+        icon: Ticket,
+        keywords: ['tickets', 'discord', 'doacao', 'roles'],
       },
       {
         label: 'Depoimentos',

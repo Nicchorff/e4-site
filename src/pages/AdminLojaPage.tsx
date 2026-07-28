@@ -182,16 +182,13 @@ export function AdminLojaPage() {
             Loja · catálogo
           </h1>
           <p className="mt-2 max-w-xl text-sm text-e4-silver">
-            Curadoria de destaques e edição essencial de produtos. Pagamentos no{' '}
-            <a
-              href="https://dashboard.stripe.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-e4-gold underline-offset-2 hover:underline"
-            >
-              Stripe Dashboard
-            </a>
-            . Setup: <code className="text-e4-gold">docs/stripe-store-setup.md</code>.
+            Curadoria de destaques e edição essencial de produtos. Checkout
+            atual: ticket Discord (ver{' '}
+            <Link to="/admin/doacoes" className="text-e4-gold underline-offset-2 hover:underline">
+              Doações
+            </Link>
+            ). Stripe permanece no código para reativar depois. Doc:{' '}
+            <code className="text-e4-gold">docs/discord-donation-tickets.md</code>.
           </p>
         </div>
         <Button asChild variant="outline" className="border-e4-gold-deep/50">

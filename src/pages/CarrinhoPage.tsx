@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/useAuth'
 import { useCart } from '@/hooks/useCart'
-import { createCheckoutSession } from '@/lib/store'
+import { createDonationTicket } from '@/lib/store'
+import { getDiscordInviteUrl } from '@/lib/home-content'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { formatBrl } from '@/types/store'
 
@@ -12,14 +13,16 @@ export function CarrinhoPage() {
   const { lines, totalCents, setQuantity, removeItem, clear, itemCount } =
     useCart()
   const { user, signInWithDiscord } = useAuth()
-  const [searchParams] = useSearchParams()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [ticketResult, setTicketResult] = useState<{
+    channelUrl: string
+    orderId: string
+  } | null>(null)
 
-  const success = searchParams.get('success') === '1'
-  const cancelled = searchParams.get('cancelled') === '1'
+  const discordInvite = getDiscordInviteUrl()
 
-  async function handleCheckout() {
+  async function handleOpenTicket() {
     if (!user) {
       await signInWithDiscord()
       return
@@ -29,39 +32,66 @@ export function CarrinhoPage() {
     setBusy(true)
     setError(null)
     try {
-      const { url } = await createCheckoutSession(
+      const result = await createDonationTicket(
         lines.map((l) => ({
           productId: l.product.id,
           quantity: l.quantity,
         })),
       )
       clear()
-      window.location.href = url
+      setTicketResult(result)
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : 'Não foi possível iniciar o checkout. Confira as chaves Stripe.',
+          : 'Não foi possível abrir o ticket no Discord.',
       )
+    } finally {
       setBusy(false)
     }
+  }
+
+  if (ticketResult) {
+    return (
+      <section className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
+        <h1 className="font-display text-3xl text-e4-white">Ticket aberto</h1>
+        <p className="mt-4 rounded-md border border-e4-gold/40 bg-e4-gold/10 px-3 py-2 text-sm text-e4-gold">
+          Pedido criado. Assim que possível alguém irá te atender no Discord.
+          Envie o comprovante no canal do ticket.
+        </p>
+        <p className="mt-3 font-mono text-xs text-e4-silver">
+          Pedido: {ticketResult.orderId}
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Button
+            asChild
+            size="lg"
+            className="bg-e4-gold font-display font-bold uppercase text-e4-black hover:bg-e4-gold-deep hover:text-white"
+          >
+            <a href={ticketResult.channelUrl} target="_blank" rel="noreferrer">
+              Abrir canal do ticket
+            </a>
+          </Button>
+          <Button asChild variant="outline" className="border-e4-gold-deep/50">
+            <a href={discordInvite} target="_blank" rel="noreferrer">
+              Entrar no Discord E4
+            </a>
+          </Button>
+          <Button asChild variant="ghost">
+            <Link to="/loja">Voltar à loja</Link>
+          </Button>
+        </div>
+      </section>
+    )
   }
 
   return (
     <section className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
       <h1 className="font-display text-3xl text-e4-white">Carrinho</h1>
-
-      {success && (
-        <p className="mt-4 rounded-md border border-e4-gold/40 bg-e4-gold/10 px-3 py-2 text-sm text-e4-gold">
-          Pagamento iniciado/concluído. Se a Stripe confirmou, a entrega entra na
-          fila do servidor em breve.
-        </p>
-      )}
-      {cancelled && (
-        <p className="mt-4 rounded-md border border-e4-dusk/40 bg-e4-dusk/10 px-3 py-2 text-sm text-e4-dusk">
-          Checkout cancelado. Seus itens ainda podem estar no carrinho.
-        </p>
-      )}
+      <p className="mt-2 text-sm text-e4-silver">
+        Pagamento via ticket Discord (temporário). Após abrir o ticket, envie o
+        comprovante no canal.
+      </p>
 
       {itemCount === 0 ? (
         <div className="mt-8 space-y-4">
@@ -121,7 +151,7 @@ export function CarrinhoPage() {
 
           {!user && (
             <p className="text-sm text-e4-silver">
-              Faça login com Discord para pagar.
+              Faça login com Discord para abrir o ticket.
             </p>
           )}
 
@@ -129,13 +159,13 @@ export function CarrinhoPage() {
             size="lg"
             disabled={busy}
             className="w-full bg-e4-gold font-display font-bold uppercase text-e4-black hover:bg-e4-gold-deep hover:text-white sm:w-auto"
-            onClick={() => void handleCheckout()}
+            onClick={() => void handleOpenTicket()}
           >
             {busy
-              ? 'Redirecionando…'
+              ? 'Abrindo ticket…'
               : user
-                ? 'Pagar com Stripe'
-                : 'Entrar e pagar'}
+                ? 'Abrir ticket'
+                : 'Entrar e abrir ticket'}
           </Button>
         </div>
       )}

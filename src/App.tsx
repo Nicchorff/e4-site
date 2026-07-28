@@ -34,6 +34,11 @@ const AdminRegrasPage = lazy(() =>
 const AdminLojaPage = lazy(() =>
   import('@/pages/AdminLojaPage').then((m) => ({ default: m.AdminLojaPage })),
 )
+const AdminDoacoesPage = lazy(() =>
+  import('@/pages/AdminDoacoesPage').then((m) => ({
+    default: m.AdminDoacoesPage,
+  })),
+)
 const AdminConteudoPage = lazy(() =>
   import('@/pages/AdminConteudoPage').then((m) => ({
     default: m.AdminConteudoPage,
@@ -109,6 +114,14 @@ export default function App() {
                     element={
                       <RequireAdmin>
                         <AdminLojaPage />
+                      </RequireAdmin>
+                    }
+                  />
+                  <Route
+                    path="admin/doacoes"
+                    element={
+                      <RequireAdmin>
+                        <AdminDoacoesPage />
                       </RequireAdmin>
                     }
                   />

@@ -83,7 +83,7 @@ export function Footer() {
       <div className="border-t border-e4-gold-deep/20 px-4 py-4 text-center text-xs text-e4-silver/70">
         © {new Date().getFullYear()} Elite Four. Todos os direitos reservados.
         <span className="mt-1 block">
-          Pagamentos da loja processados pela Stripe.
+          Pagamento via ticket Discord (temporário).
         </span>
       </div>
     </footer>

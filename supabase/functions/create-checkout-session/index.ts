@@ -96,6 +96,7 @@ Deno.serve(async (req) => {
         user_id: user.id,
         status: "pending",
         total_cents: total,
+        payment_method: "stripe",
       })
       .select()
       .single();

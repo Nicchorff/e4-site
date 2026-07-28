@@ -21,9 +21,20 @@ Marque cada item antes de considerar o site em produção. Domínio: use `https:
 
 Guia: [discord-bot-setup.md](./discord-bot-setup.md)
 
-## Stripe / loja
+## Loja / tickets Discord (checkout atual)
 
-- [ ] `STRIPE_SECRET_KEY` (test → live quando for o go-live)
+- [ ] Categorias `Ticket | Aberto` / `Ticket | Em andamento` / `Ticket | Finalizado` + IDs nos secrets
+- [ ] `DISCORD_PUBLIC_KEY` + Interactions Endpoint URL
+- [ ] Deploy `create-donation-ticket` e `discord-interactions` (`--no-verify-jwt`)
+- [ ] Slash `/comprovante-aprovado` registrado no guild
+- [ ] Role IDs em Admin → Doações
+- [ ] Teste: Abrir ticket → Assumir → comando → order `paid` + deliveries
+
+Guia: [discord-donation-tickets.md](./discord-donation-tickets.md)
+
+## Stripe / loja (pausado na UI — código permanece)
+
+- [ ] `STRIPE_SECRET_KEY` (test → live quando reativar)
 - [ ] Webhook `checkout.session.completed` → `https://dppyamtmjzmmkzjlmiew.supabase.co/functions/v1/stripe-webhook`
 - [ ] `STRIPE_WEBHOOK_SECRET` = signing secret do endpoint
 - [ ] `SITE_URL=https://SEU_DOMINIO`

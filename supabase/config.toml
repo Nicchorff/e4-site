@@ -5,3 +5,9 @@ enabled = true
 
 [functions.sync-discord-roles]
 verify_jwt = true
+
+[functions.create-donation-ticket]
+verify_jwt = true
+
+[functions.discord-interactions]
+verify_jwt = false

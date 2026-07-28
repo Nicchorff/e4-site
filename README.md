@@ -55,9 +55,11 @@ VITE_SUPABASE_ANON_KEY=<anon key>
 VITE_SITE_URL=http://localhost:5173
 ```
 
-### 4. Loja Stripe (Fase 4)
+### 4. Loja — tickets Discord (atual) + Stripe (código)
 
-Guia: **[docs/stripe-store-setup.md](./docs/stripe-store-setup.md)** · template: [`.env.example`](./.env.example)
+Checkout na UI: **Abrir ticket** → canal Discord. Guia: **[docs/discord-donation-tickets.md](./docs/discord-donation-tickets.md)**.
+
+Stripe permanece no código para reativar depois: **[docs/stripe-store-setup.md](./docs/stripe-store-setup.md)**.
 
 Resource FiveM stub: `fivem-resource/elite4-delivery/`.
 
@@ -79,12 +81,14 @@ Cole estes valores quando tiver as chaves (compra real não funciona sem eles):
 
 | Secret | Uso |
 |---|---|
-| `DISCORD_BOT_TOKEN` | Sync de cargos |
+| `DISCORD_BOT_TOKEN` | Sync de cargos + tickets |
 | `DISCORD_GUILD_ID` | Servidor Discord |
-| `DISCORD_ADMIN_ROLE_ID` / `DISCORD_STAFF_ROLE_ID` | Mapeamento → `profiles.role` |
-| `STRIPE_SECRET_KEY` | Checkout Session |
-| `STRIPE_WEBHOOK_SECRET` | Assinatura do webhook |
-| `SITE_URL` | URLs de sucesso/cancelamento |
+| `DISCORD_ADMIN_ROLE_ID` / `DISCORD_STAFF_ROLE_ID` | `profiles.role` + moderar tickets |
+| `DISCORD_PUBLIC_KEY` | Verificar Interactions Endpoint |
+| `DISCORD_CATEGORY_OPEN_ID` / `_IN_PROGRESS_ID` / `_FINISHED_ID` | Categorias dos tickets |
+| `STRIPE_SECRET_KEY` | (opcional agora) Checkout Session |
+| `STRIPE_WEBHOOK_SECRET` | Assinatura do webhook Stripe |
+| `SITE_URL` | URLs de sucesso/cancelamento Stripe |
 | `FIVEM_API_KEY` | Header `x-api-key` das functions FiveM |
 
 ### 5. Hero media (Lighthouse)

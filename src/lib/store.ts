@@ -283,3 +283,56 @@ export async function createCheckoutSession(
   }
   return { url: data.url, orderId: data.orderId }
 }
+
+export async function createDonationTicket(
+  items: { productId: string; quantity: number }[],
+): Promise<{ channelUrl: string; orderId: string }> {
+  if (!isSupabaseConfigured) {
+    throw new Error('Supabase não configurado')
+  }
+
+  const { data, error } = await supabase.functions.invoke<{
+    channelUrl?: string
+    orderId?: string
+    error?: string
+  }>('create-donation-ticket', {
+    body: { items },
+  })
+
+  if (error) throw error
+  if (data?.error) throw new Error(data.error)
+  if (!data?.channelUrl || !data.orderId) {
+    throw new Error('Resposta inválida ao abrir ticket')
+  }
+  return { channelUrl: data.channelUrl, orderId: data.orderId }
+}
+
+export async function fetchDonationTicketSettings(): Promise<{
+  viewer_role_ids: string[]
+}> {
+  if (!isSupabaseConfigured) return { viewer_role_ids: [] }
+  const { data, error } = await supabase
+    .from('donation_ticket_settings')
+    .select('viewer_role_ids')
+    .eq('id', 1)
+    .maybeSingle()
+  if (error) throw error
+  return {
+    viewer_role_ids: Array.isArray(data?.viewer_role_ids)
+      ? data.viewer_role_ids.map(String)
+      : [],
+  }
+}
+
+export async function updateDonationTicketSettings(
+  viewerRoleIds: string[],
+): Promise<void> {
+  if (!isSupabaseConfigured) throw new Error('Supabase não configurado')
+  const cleaned = viewerRoleIds.map((id) => id.trim()).filter(Boolean)
+  const { error } = await supabase.from('donation_ticket_settings').upsert({
+    id: 1,
+    viewer_role_ids: cleaned,
+    updated_at: new Date().toISOString(),
+  })
+  if (error) throw error
+}

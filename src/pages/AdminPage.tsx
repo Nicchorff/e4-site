@@ -13,7 +13,12 @@ const sections = [
   {
     to: '/admin/loja',
     title: 'Loja',
-    blurb: 'Catálogo, destaques + Stripe',
+    blurb: 'Catálogo, destaques e tickets Discord',
+  },
+  {
+    to: '/admin/doacoes',
+    title: 'Doações',
+    blurb: 'Cargos que veem tickets no Discord',
   },
   {
     to: '/admin/depoimentos',
