@@ -38,6 +38,7 @@ Cada doação vira um **canal** (ex.: `doacao-fulano-a1b2c3d4`) que o bot **move
 | Cargos responsáveis (Admin/Staff + IDs em `/admin/doacoes`) | Sempre as **3 categorias** e **todos** os canais de ticket |
 | Doador com ticket aberto/em andamento | Só o **próprio canal** (a categoria aparece só por causa desse canal) |
 | Membro sem ticket | **Não vê** as categorias Ticket |
+| Bot E4 | Sempre vê as categorias e pode enviar a mensagem inicial (overwrite explícito) |
 
 Na prática o bot aplica:
 

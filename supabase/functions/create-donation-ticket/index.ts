@@ -45,6 +45,10 @@ function sanitizeChannelPart(raw: string) {
     .slice(0, 24) || "user";
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function discordApi(
   token: string,
   method: string,
@@ -76,12 +80,13 @@ async function discordApi(
   return data as Record<string, unknown>;
 }
 
-/** Staff always sees the 3 categories; @everyone never does (buyers only see via their channel). */
+/** Staff + bot always see the 3 categories; @everyone never does. */
 async function syncTicketCategoryVisibility(
   token: string,
   guildId: string,
   categoryIds: string[],
   staffRoleIds: string[],
+  botUserId: string,
 ) {
   for (const categoryId of categoryIds) {
     if (!categoryId) continue;
@@ -99,6 +104,12 @@ async function syncTicketCategoryVisibility(
         { type: 0, allow: String(VIEW_CHANNEL), deny: "0" },
       );
     }
+    await discordApi(
+      token,
+      "PUT",
+      `/channels/${categoryId}/permissions/${botUserId}`,
+      { type: 1, allow: String(VIEW_CHANNEL), deny: "0" },
+    );
   }
 }
 
@@ -165,6 +176,9 @@ Deno.serve(async (req) => {
     }
 
     const admin = createClient(supabaseUrl, serviceKey);
+
+    const botMe = await discordApi(botToken, "GET", "/users/@me");
+    const botUserId = String(botMe.id);
 
     const { data: profile, error: profileErr } = await admin
       .from("profiles")
@@ -236,6 +250,7 @@ Deno.serve(async (req) => {
         guildId,
         [categoryOpenId, categoryInProgressId ?? "", categoryFinishedId ?? ""],
         staffRoleIds,
+        botUserId,
       );
     } catch (err) {
       console.error("category visibility sync failed", err);
@@ -288,6 +303,12 @@ Deno.serve(async (req) => {
         deny: String(VIEW_CHANNEL),
       },
       {
+        id: botUserId,
+        type: 1,
+        allow: String(STAFF_ALLOW),
+        deny: "0",
+      },
+      {
         id: profile.discord_id,
         type: 1,
         allow: String(BUYER_ALLOW),
@@ -330,7 +351,7 @@ Deno.serve(async (req) => {
       title: "Nova doação · ticket aberto",
       color: 0xf2b705,
       description:
-        "Assim que possível alguém irá te atender.\nEnvie o comprovante neste canal.",
+        "Em alguns instantes alguém vai te atender.\nEnvie o comprovante neste canal.",
       fields: [
         {
           name: "Doador",
@@ -363,21 +384,49 @@ Deno.serve(async (req) => {
       },
     ];
 
+    const messagePayload = {
+      content: `<@${profile.discord_id}>`,
+      embeds: [embed],
+      components,
+    };
+
     let messageId: string | null = null;
-    try {
-      const message = await discordApi(
-        botToken,
-        "POST",
-        `/channels/${channelId}/messages`,
+    let lastMessageError: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        if (attempt > 0) await sleep(500);
+        const message = await discordApi(
+          botToken,
+          "POST",
+          `/channels/${channelId}/messages`,
+          messagePayload,
+        );
+        messageId = String(message.id);
+        lastMessageError = null;
+        break;
+      } catch (err) {
+        lastMessageError = err;
+        console.error(`Failed to post ticket message (attempt ${attempt + 1})`, err);
+      }
+    }
+
+    if (!messageId) {
+      try {
+        await discordApi(botToken, "DELETE", `/channels/${channelId}`);
+      } catch (cleanupErr) {
+        console.error("Failed to delete orphan channel", cleanupErr);
+      }
+      await admin.from("orders").delete().eq("id", order.id);
+      const detail =
+        lastMessageError instanceof Error
+          ? lastMessageError.message
+          : "Falha ao enviar mensagem do ticket";
+      return json(
         {
-          content: `<@${profile.discord_id}>`,
-          embeds: [embed],
-          components,
+          error: `Canal criado, mas o bot não conseguiu enviar a mensagem inicial: ${detail}`,
         },
+        500,
       );
-      messageId = String(message.id);
-    } catch (err) {
-      console.error("Failed to post ticket message", err);
     }
 
     const { error: ticketErr } = await admin.from("donation_tickets").insert({
