@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Bloquear painel e auth
+Disallow: /admin
+Disallow: /auth/
+
+Sitemap: https://REPLACE_WITH_SITE_URL/sitemap.xml

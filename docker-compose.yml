@@ -1,0 +1,16 @@
+services:
+  web:
+    build:
+      context: .
+      args:
+        VITE_SITE_URL: ${VITE_SITE_URL:-http://localhost:8080}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
+        VITE_DISCORD_INVITE_URL: ${VITE_DISCORD_INVITE_URL:-}
+        VITE_INSTAGRAM_URL: ${VITE_INSTAGRAM_URL:-}
+        VITE_TIKTOK_URL: ${VITE_TIKTOK_URL:-}
+        VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY:-}
+        VITE_PLAUSIBLE_DOMAIN: ${VITE_PLAUSIBLE_DOMAIN:-}
+    ports:
+      - "8080:80"
+    restart: unless-stopped

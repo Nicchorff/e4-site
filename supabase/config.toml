@@ -1,0 +1,7 @@
+project_id = "dppyamtmjzmmkzjlmiew"
+
+[api]
+enabled = true
+
+[functions.sync-discord-roles]
+verify_jwt = true

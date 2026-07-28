@@ -1,0 +1,175 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@import '@fontsource/rajdhani/600.css';
+@import '@fontsource/rajdhani/700.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/press-start-2p/400.css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* E4 brand tokens (PRD §6) */
+  --e4-black: #0b0b0d;
+  --e4-black-soft: #16161a;
+  --e4-white: #f7f6f2;
+  --e4-gold: #f2b705;
+  --e4-gold-deep: #b8860b;
+  --e4-silver: #d8dce3;
+  --e4-dusk: #e8734a;
+
+  /* Dark theme is the product default */
+  --background: var(--e4-black);
+  --foreground: var(--e4-white);
+  --card: var(--e4-black-soft);
+  --card-foreground: var(--e4-white);
+  --popover: var(--e4-black-soft);
+  --popover-foreground: var(--e4-white);
+  --primary: var(--e4-gold);
+  --primary-foreground: var(--e4-black);
+  --secondary: #1e1e24;
+  --secondary-foreground: var(--e4-white);
+  --muted: #1e1e24;
+  --muted-foreground: var(--e4-silver);
+  --accent: var(--e4-gold-deep);
+  --accent-foreground: var(--e4-white);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: color-mix(in srgb, var(--e4-gold-deep) 35%, transparent);
+  --input: color-mix(in srgb, var(--e4-gold-deep) 40%, transparent);
+  --ring: var(--e4-gold);
+  --radius: 0.5rem;
+
+  --font-display: 'Rajdhani', sans-serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-heading: var(--font-display);
+
+  --chart-1: var(--e4-gold);
+  --chart-2: var(--e4-gold-deep);
+  --chart-3: var(--e4-dusk);
+  --chart-4: var(--e4-silver);
+  --chart-5: #1e1e24;
+  --sidebar: var(--e4-black-soft);
+  --sidebar-foreground: var(--e4-white);
+  --sidebar-primary: var(--e4-gold);
+  --sidebar-primary-foreground: var(--e4-black);
+  --sidebar-accent: #1e1e24;
+  --sidebar-accent-foreground: var(--e4-white);
+  --sidebar-border: color-mix(in srgb, var(--e4-gold-deep) 35%, transparent);
+  --sidebar-ring: var(--e4-gold);
+}
+
+@theme inline {
+  --color-e4-black: var(--e4-black);
+  --color-e4-black-soft: var(--e4-black-soft);
+  --color-e4-white: var(--e4-white);
+  --color-e4-gold: var(--e4-gold);
+  --color-e4-gold-deep: var(--e4-gold-deep);
+  --color-e4-silver: var(--e4-silver);
+  --color-e4-dusk: var(--e4-dusk);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-pixel: var(--font-pixel);
+  --font-heading: var(--font-heading);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply m-0 min-h-svh bg-e4-black font-sans text-e4-white antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display font-bold tracking-wide;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-e4-gold;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .e4-facet-divider {
+    clip-path: polygon(0 0, 100% 0, 100% 70%, 0 100%);
+  }
+
+  .e4-facet-edge {
+    clip-path: polygon(0 12%, 100% 0, 100% 100%, 0 100%);
+  }
+
+  .font-pixel-badge {
+    font-family: var(--font-pixel);
+    font-size: 0.625rem;
+    letter-spacing: 0.05em;
+    line-height: 1.4;
+  }
+}
