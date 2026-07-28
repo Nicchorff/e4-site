@@ -119,7 +119,10 @@ Deno.serve(async (req) => {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
+      locale: "pt-BR",
+      client_reference_id: order.id,
       customer_email: user.email ?? undefined,
+      // Omit payment_method_types → Stripe usa métodos habilitados no Dashboard (card/Pix/etc.)
       line_items: lineRows.map((row) => {
         const product = productMap.get(row.product_id)!;
         return {

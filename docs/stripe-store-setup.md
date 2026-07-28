@@ -1,82 +1,81 @@
 # Stripe + loja E4 — setup
 
-Catálogo e pedidos ficam no **Supabase**. A **Stripe** só processa o pagamento (Checkout Session + webhook). Sem Tebex.
+Catálogo e pedidos ficam no **Supabase**. A **Stripe** só processa o pagamento (Checkout Session + webhook). Sem Tebex / Billing / Invoicing nesta etapa.
+
+**Produção atual:** `https://sites-e4.ltgujx.easypanel.host`
 
 ## Fluxo
 
 1. Comprador autenticado (Discord) monta o carrinho e clica em pagar.
-2. Edge Function `create-checkout-session` valida preços no DB, cria `orders`/`order_items` e uma Checkout Session.
+2. Edge Function `create-checkout-session` valida preços no DB, cria `orders`/`order_items` e uma Checkout Session (`locale: pt-BR`, payment methods automáticos).
 3. Stripe redireciona para o Checkout hospedado.
-4. Em `checkout.session.completed`, `stripe-webhook` marca o pedido `paid` e enfileira linhas em `deliveries` (`pending`).
+4. Em `checkout.session.completed` (pago) ou `checkout.session.async_payment_succeeded` (ex.: Pix), `stripe-webhook` marca o pedido `paid` e enfileira `deliveries`.
 5. O resource FiveM (`fivem-resource/elite4-delivery`) faz poll em `fivem-pending` e confirma com `fivem-deliver`.
 
 ## Variáveis
 
-### Frontend (`.env`)
+### EasyPanel — Build args (front)
 
 ```env
-VITE_SITE_URL=http://localhost:5173
+VITE_SITE_URL=https://sites-e4.ltgujx.easypanel.host
 VITE_SUPABASE_URL=https://dppyamtmjzmmkzjlmiew.supabase.co
-VITE_SUPABASE_ANON_KEY=
-# Opcional — Checkout redirect não exige publishable key no client
-VITE_STRIPE_PUBLISHABLE_KEY=
+VITE_SUPABASE_ANON_KEY=<anon key>
+VITE_DISCORD_INVITE_URL=https://discord.gg/...
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```
 
-### Secrets das Edge Functions (Dashboard → Edge Functions → Secrets)
+Rebuild da imagem após mudar qualquer `VITE_*`.
+
+### Secrets Edge Functions (já configuráveis via CLI / Dashboard)
 
 | Secret | Uso |
 |---|---|
 | `STRIPE_SECRET_KEY` | `sk_test_…` / `sk_live_…` |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_…` do endpoint webhook |
-| `SITE_URL` | URL pública do site (success/cancel URLs) |
-| `FIVEM_API_KEY` | Mesma chave do `config.lua` do resource |
+| `SITE_URL` | `https://sites-e4.ltgujx.easypanel.host` |
+| `FIVEM_API_KEY` | Header `x-api-key` das functions FiveM |
 
 `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` já existem no runtime.
 
-## Stripe Dashboard
+## Webhook Stripe (modo Test)
 
-1. Crie conta / ative modo **Test**.
-2. Developers → API keys → copie Secret Key para `STRIPE_SECRET_KEY`.
-3. Developers → Webhooks → Add endpoint:
-   - URL: `https://dppyamtmjzmmkzjlmiew.supabase.co/functions/v1/stripe-webhook`
-   - Evento: `checkout.session.completed`
-   - Copie o signing secret → `STRIPE_WEBHOOK_SECRET`
-4. (Local) use o CLI:
+- URL: `https://dppyamtmjzmmkzjlmiew.supabase.co/functions/v1/stripe-webhook`
+- Eventos: `checkout.session.completed`, `checkout.session.async_payment_succeeded`
+- Signing secret → `STRIPE_WEBHOOK_SECRET`
+
+Local (opcional):
 
 ```bash
 stripe listen --forward-to https://dppyamtmjzmmkzjlmiew.supabase.co/functions/v1/stripe-webhook
 ```
 
-Use o `whsec_…` que o `listen` imprimir enquanto testar localmente.
-
-## Functions deployadas
+## Functions
 
 | Function | JWT |
 |---|---|
 | `create-checkout-session` | sim (usuário logado) |
 | `stripe-webhook` | **não** (assinatura Stripe) |
-| `fivem-pending` | **não** (`x-api-key`) |
-| `fivem-deliver` | **não** (`x-api-key`) |
+| `fivem-pending` / `fivem-deliver` | **não** (`x-api-key`) |
 
 ## Checklist de compra de teste
 
-- [ ] Secrets Stripe + `SITE_URL` + `FIVEM_API_KEY` configurados
-- [ ] Catálogo seed visível em `/loja`
-- [ ] Login Discord → adicionar item → `/loja/carrinho` → Checkout
-- [ ] Cartão de teste `4242 4242 4242 4242`
-- [ ] Webhook marca `orders.status = paid` e cria `deliveries`
-- [ ] Resource FiveM (ou `curl` com `x-api-key`) lista pending
-
-Sem chaves Stripe, catálogo/carrinho/UI admin funcionam; o CTA de pagar falha até as secrets existirem — isso é esperado.
-
-## FiveM
-
-Ver `fivem-resource/elite4-delivery/README.md`. Matching do jogador é por **Discord ID** (`player_discord_id`), alinhado ao perfil Auth.
+- [x] Secrets Stripe + `SITE_URL` configurados no projeto Supabase
+- [x] Webhook de teste criado apontando para `stripe-webhook`
+- [ ] EasyPanel rebuild com `VITE_STRIPE_PUBLISHABLE_KEY` + `VITE_SITE_URL`
+- [ ] Login Discord no domínio → item no carrinho → Pagar
+- [ ] Cartão teste `4242 4242 4242 4242`
+- [ ] Pedido `paid` + linha em `deliveries`
+- [ ] **Rotacionar** a `sk_test` no Dashboard (foi exposta em chat) e atualizar o secret
 
 ## Pix / Brasil
 
-Habilite métodos de pagamento no Dashboard Stripe (conta BR). Pix não é obrigatório nesta fase.
+Habilite Pix (e outros métodos) em Stripe Dashboard → Settings → Payment methods. O Checkout usa `automatic_payment_methods`.
+
+## Segurança
+
+- Nunca commit keys no Git.
+- Secret key colada em chat: faça **Roll** em Developers → API keys após o primeiro teste OK e rode `supabase secrets set STRIPE_SECRET_KEY=sk_test_nova… --project-ref dppyamtmjzmmkzjlmiew`.
 
 ## Admin
 
-`/admin/loja` — listar/editar produtos, toggle destaque e badge em `featured_items`.
+`/admin/loja` — catálogo e destaques.
