@@ -10,6 +10,7 @@ import {
   updateFeaturedBadge,
   upsertProduct,
 } from '@/lib/store'
+import { uploadProductImage, validateProductImage } from '@/lib/storage'
 import type { StoreCategory, StoreProduct } from '@/types/store'
 import { formatBrl } from '@/types/store'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
@@ -38,6 +39,9 @@ export function AdminLojaPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm)
+  const [pendingImage, setPendingImage] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [imageInputKey, setImageInputKey] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -64,6 +68,16 @@ export function AdminLojaPage() {
     void load()
   }, [load])
 
+  useEffect(() => {
+    if (!pendingImage) {
+      setPreviewUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(pendingImage)
+    setPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [pendingImage])
+
   const catName = useMemo(() => {
     const map = new Map(categories.map((c) => [c.id, c.name]))
     return (id: string) => map.get(id) ?? '—'
@@ -74,6 +88,8 @@ export function AdminLojaPage() {
       ...emptyForm,
       category_id: categories[0]?.id ?? '',
     })
+    setPendingImage(null)
+    setImageInputKey((k) => k + 1)
     setError(null)
   }
 
@@ -91,7 +107,29 @@ export function AdminLojaPage() {
       is_active: p.is_active,
       is_featured: p.is_featured,
     })
+    setPendingImage(null)
+    setImageInputKey((k) => k + 1)
     setError(null)
+  }
+
+  function onImagePick(file: File | null) {
+    if (!file) {
+      setPendingImage(null)
+      return
+    }
+    const validationError = validateProductImage(file)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+    setError(null)
+    setPendingImage(file)
+  }
+
+  function clearImage() {
+    setPendingImage(null)
+    setForm((f) => ({ ...f, image_url: '' }))
+    setImageInputKey((k) => k + 1)
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -119,6 +157,11 @@ export function AdminLojaPage() {
     setSaving(true)
     setError(null)
     try {
+      let image_url: string | null = form.image_url || null
+      if (pendingImage) {
+        image_url = await uploadProductImage(pendingImage)
+      }
+
       const productId = await upsertProduct({
         id: form.id,
         category_id: form.category_id,
@@ -126,7 +169,7 @@ export function AdminLojaPage() {
         name: form.name,
         description: form.description,
         price_cents: Math.round(price * 100),
-        image_url: form.image_url || null,
+        image_url,
         benefits: form.benefits_text
           .split('\n')
           .map((s) => s.trim())
@@ -371,16 +414,47 @@ export function AdminLojaPage() {
               />
             </label>
 
-            <label className="block text-xs text-e4-silver">
-              Image URL
-              <Input
-                className="mt-1 border-e4-gold-deep/40 bg-e4-black"
-                value={form.image_url}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, image_url: e.target.value }))
-                }
-              />
-            </label>
+            <div className="space-y-2 text-xs text-e4-silver">
+              <span className="block">Imagem</span>
+              {(previewUrl || form.image_url) && (
+                <img
+                  src={previewUrl ?? form.image_url}
+                  alt="Prévia do produto"
+                  className="aspect-video w-full rounded-md border border-e4-gold-deep/40 object-cover"
+                />
+              )}
+              <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-e4-gold-deep/50 bg-e4-black px-3 py-4 text-center transition-colors hover:border-e4-gold hover:bg-e4-black/80">
+                <span className="text-sm text-e4-gold">Anexar imagem</span>
+                <span className="text-[11px] text-e4-silver/80">
+                  JPEG, PNG, WebP ou GIF · máx. 5MB
+                </span>
+                <input
+                  key={imageInputKey}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="sr-only"
+                  onChange={(e) =>
+                    onImagePick(e.target.files?.[0] ?? null)
+                  }
+                />
+              </label>
+              {pendingImage && (
+                <p className="truncate text-[11px] text-e4-gold">
+                  {pendingImage.name}
+                </p>
+              )}
+              {(pendingImage || form.image_url) && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="px-0 text-e4-dusk hover:text-e4-dusk"
+                  onClick={clearImage}
+                >
+                  Remover
+                </Button>
+              )}
+            </div>
 
             <label className="block text-xs text-e4-silver">
               delivery_payload (JSON)
