@@ -124,36 +124,55 @@ function buildFormEmbed(settings) {
 }
 
 async function ensureFormEmbed() {
-  const channel = await client.channels.fetch(formChannelId).catch(() => null)
-  if (!channel || !channel.isTextBased()) {
-    console.error('Form channel not found or not text-based:', formChannelId)
-    return
-  }
-
-  const settings = await loadEmbedSettings()
-  const payload = buildFormEmbed(settings)
-
-  if (settings.embed_message_id) {
-    try {
-      const existing = await channel.messages.fetch(settings.embed_message_id)
-      await existing.edit(payload)
-      console.log('Updated whitelist form embed', settings.embed_message_id)
-      return
-    } catch {
-      console.warn('Stored embed message missing; posting a new one')
-    }
-  }
-
-  const msg = await channel.send(payload)
-  await supabase
-    .from('whitelist_embed_settings')
-    .update({
-      embed_message_id: msg.id,
-      updated_at: new Date().toISOString(),
+  try {
+    const channel = await client.channels.fetch(formChannelId).catch((err) => {
+      console.error(
+        'Cannot fetch form channel',
+        formChannelId,
+        err?.message ?? err,
+      )
+      return null
     })
-    .eq('id', 1)
+    if (!channel || !channel.isTextBased()) {
+      console.error(
+        'Form channel missing or inaccessible. Give the bot Ver canal + Enviar mensagens on',
+        formChannelId,
+      )
+      return
+    }
 
-  console.log('Posted whitelist form embed', msg.id)
+    const settings = await loadEmbedSettings()
+    const payload = buildFormEmbed(settings)
+
+    if (settings.embed_message_id) {
+      try {
+        const existing = await channel.messages.fetch(settings.embed_message_id)
+        await existing.edit(payload)
+        console.log('Updated whitelist form embed', settings.embed_message_id)
+        return
+      } catch {
+        console.warn('Stored embed message missing; posting a new one')
+      }
+    }
+
+    const msg = await channel.send(payload)
+    await supabase
+      .from('whitelist_embed_settings')
+      .update({
+        embed_message_id: msg.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', 1)
+
+    console.log('Posted whitelist form embed', msg.id)
+  } catch (err) {
+    console.error(
+      'ensureFormEmbed failed (bot stays online). Fix channel perms for',
+      formChannelId,
+      '→',
+      err?.message ?? err,
+    )
+  }
 }
 
 async function refreshActiveFromDb(threadId) {
