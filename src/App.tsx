@@ -54,6 +54,21 @@ const AdminUsuariosPage = lazy(() =>
     default: m.AdminUsuariosPage,
   })),
 )
+const AdminWhitelistPerguntasPage = lazy(() =>
+  import('@/pages/AdminWhitelistPerguntasPage').then((m) => ({
+    default: m.AdminWhitelistPerguntasPage,
+  })),
+)
+const AdminWhitelistFormulariosPage = lazy(() =>
+  import('@/pages/AdminWhitelistFormulariosPage').then((m) => ({
+    default: m.AdminWhitelistFormulariosPage,
+  })),
+)
+const AdminWhitelistEntrevistasPage = lazy(() =>
+  import('@/pages/AdminWhitelistEntrevistasPage').then((m) => ({
+    default: m.AdminWhitelistEntrevistasPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -138,6 +153,30 @@ export default function App() {
                     element={
                       <RequireAdmin>
                         <AdminUsuariosPage />
+                      </RequireAdmin>
+                    }
+                  />
+                  <Route
+                    path="admin/whitelist/perguntas"
+                    element={
+                      <RequireAdmin>
+                        <AdminWhitelistPerguntasPage />
+                      </RequireAdmin>
+                    }
+                  />
+                  <Route
+                    path="admin/whitelist/formularios"
+                    element={
+                      <RequireAdmin>
+                        <AdminWhitelistFormulariosPage />
+                      </RequireAdmin>
+                    }
+                  />
+                  <Route
+                    path="admin/whitelist/entrevistas"
+                    element={
+                      <RequireAdmin>
+                        <AdminWhitelistEntrevistasPage />
                       </RequireAdmin>
                     }
                   />

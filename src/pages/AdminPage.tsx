@@ -30,6 +30,21 @@ const sections = [
     title: 'Usuários',
     blurb: 'Perfis e cargos do Discord (read-only)',
   },
+  {
+    to: '/admin/whitelist/perguntas',
+    title: 'WL · Perguntas',
+    blurb: 'Perguntas e embed do formulário Discord',
+  },
+  {
+    to: '/admin/whitelist/formularios',
+    title: 'WL · Formulários',
+    blurb: 'Revisar respostas e aprovar / recusar',
+  },
+  {
+    to: '/admin/whitelist/entrevistas',
+    title: 'WL · Entrevistas',
+    blurb: 'Fila de entrevista e liberação no servidor',
+  },
 ]
 
 export function AdminPage() {

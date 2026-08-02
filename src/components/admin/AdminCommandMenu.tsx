@@ -1,10 +1,12 @@
 import {
+  ClipboardList,
   FileText,
   Home,
   MessageSquareQuote,
   Package,
   ScrollText,
   Ticket,
+  UserCheck,
   Users,
 } from 'lucide-react'
 import { CommandMenu } from '@/components/unlumen-ui/command-menu'
@@ -54,6 +56,24 @@ const adminGroups = [
         href: '/admin/usuarios',
         icon: Users,
         keywords: ['cargos', 'discord', 'profiles'],
+      },
+      {
+        label: 'WL · Perguntas',
+        href: '/admin/whitelist/perguntas',
+        icon: ClipboardList,
+        keywords: ['whitelist', 'perguntas', 'embed', 'formulario'],
+      },
+      {
+        label: 'WL · Formulários',
+        href: '/admin/whitelist/formularios',
+        icon: FileText,
+        keywords: ['whitelist', 'formulario', 'aprovacao'],
+      },
+      {
+        label: 'WL · Entrevistas',
+        href: '/admin/whitelist/entrevistas',
+        icon: UserCheck,
+        keywords: ['whitelist', 'entrevista', 'vrp'],
       },
     ],
   },
