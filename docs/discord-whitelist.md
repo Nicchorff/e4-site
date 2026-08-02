@@ -88,16 +88,11 @@ O site estático **não** roda o Gateway. Crie **outro app** só para o bot:
 2. Source: mesmo repo GitHub (`Nicchorff/e4-site`), branch `main`
 3. Build:
    - **Dockerfile path:** `discord-bot/Dockerfile`
-   - **Docker context / Build context:** `discord-bot`
+   - **Docker context / Build context:** raiz do repo (`.`) — o Dockerfile já faz `COPY discord-bot/...`
 4. **Ports:** não precisa expor porta (é worker Gateway, não HTTP)
-5. **Environment** (Runtime, não Build Args) — cole as variáveis do bloco acima (token, guild, service role + IDs dos canais)
+5. **Environment** (Runtime **e/ou** Build Args no EasyPanel) — cole as variáveis do bloco acima (token, guild, service role + IDs dos canais). O Dockerfile aceita as duas formas.
 6. Deploy / Restart
 7. Nos logs deve aparecer algo como: `Whitelist bot ready as ...` e `Posted/Updated whitelist form embed`
-
-Se o painel exigir Build Context na raiz do repo, use:
-
-- Dockerfile path: `discord-bot/Dockerfile`
-- Context: `.` (raiz) **e** ajuste o Dockerfile para `COPY discord-bot/...` — o default deste repo já assume context = pasta `discord-bot`.
 
 Reinicie o app sempre que mudar env.
 
