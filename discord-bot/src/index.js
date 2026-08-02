@@ -201,8 +201,8 @@ async function refreshActiveFromDb(threadId) {
 }
 
 async function handleAnswer(message) {
-  if (!message.channel.isThread()) return
   if (message.author.bot) return
+  if (!message.guild) return
 
   const threadId = message.channel.id
   let app = activeByThread.get(threadId)
@@ -317,9 +317,11 @@ async function finishApplication(channel, app) {
   })
 
   try {
-    await channel.setArchived(true)
+    if (channel.isThread?.() || typeof channel.setArchived === 'function') {
+      await channel.setArchived(true)
+    }
   } catch (err) {
-    console.error('archive thread failed', err)
+    console.error('archive channel/thread failed', err)
   }
 }
 

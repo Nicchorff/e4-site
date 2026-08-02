@@ -78,12 +78,21 @@ async function removeRole(
 async function archiveThread(token: string, threadId: string | null) {
   if (!threadId) return;
   try {
+    // Works for threads; for ticket text channels just lock name prefix
     await discordApi(token, "PATCH", `/channels/${threadId}`, {
       archived: true,
       locked: true,
     });
-  } catch (err) {
-    console.error("archiveThread failed", err);
+  } catch {
+    try {
+      const ch = await discordApi(token, "GET", `/channels/${threadId}`);
+      const name = String(ch.name ?? "wl");
+      await discordApi(token, "PATCH", `/channels/${threadId}`, {
+        name: name.startsWith("closed-") ? name : `closed-${name}`.slice(0, 100),
+      });
+    } catch (err) {
+      console.error("archiveThread failed", err);
+    }
   }
 }
 

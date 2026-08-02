@@ -239,7 +239,7 @@ async function startWhitelistApplication(opts: {
   const displayName =
     member?.nick || user.global_name || user.username || user.id;
   const avatarUrl = discordAvatarUrl(user.id, user.avatar);
-  const threadName = `wl-${displayName}`
+  const channelName = `wl-${displayName}`
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
@@ -257,22 +257,23 @@ async function startWhitelistApplication(opts: {
   } catch (err) {
     return {
       ok: false as const,
-      error: `Canal de threads inacessível: ${
+      error: `Canal/categoria de whitelist inacessível: ${
         err instanceof Error ? err.message : "erro"
       }`,
     };
   }
 
   const parentType = Number(parentChannel.type);
-  // 0 text, 5 announcement, 15 forum, 16 media
+  // 0 text, 4 category, 5 announcement, 15 forum, 16 media
+  const isCategory = parentType === 4;
   const isForum = parentType === 15 || parentType === 16;
   const isTextLike = parentType === 0 || parentType === 5;
 
-  if (!isForum && !isTextLike) {
+  if (!isCategory && !isForum && !isTextLike) {
     return {
       ok: false as const,
       error:
-        `Canal de whitelist inválido (tipo ${parentType}). Use um canal de texto ou fórum.`,
+        `Destino de whitelist inválido (tipo ${parentType}). Use categoria, canal de texto ou fórum.`,
     };
   }
 
@@ -281,21 +282,95 @@ async function startWhitelistApplication(opts: {
     title: `Pergunta 1/${questions.length}`,
     description: first.prompt,
     color: 0xf2b705,
-    footer: { text: "Responda nesta thread com uma mensagem." },
+    footer: { text: "Responda neste canal com uma mensagem." },
   };
 
-  let thread: Record<string, unknown>;
+  const VIEW_CHANNEL = 1 << 10;
+  const SEND_MESSAGES = 1 << 11;
+  const EMBED_LINKS = 1 << 14;
+  const ATTACH_FILES = 1 << 15;
+  const READ_MESSAGE_HISTORY = 1 << 16;
+  const MANAGE_MESSAGES = 1 << 13;
+  const USER_ALLOW =
+    VIEW_CHANNEL | SEND_MESSAGES | READ_MESSAGE_HISTORY | ATTACH_FILES;
+  const BOT_ALLOW =
+    VIEW_CHANNEL |
+    SEND_MESSAGES |
+    READ_MESSAGE_HISTORY |
+    EMBED_LINKS |
+    ATTACH_FILES |
+    MANAGE_MESSAGES;
+
+  let ticketChannel: Record<string, unknown>;
   let botMsgId: string | null = null;
 
   try {
-    if (isForum) {
-      // Forum/media: thread + starter message required (no private threads)
-      thread = await discordApi(
+    if (isCategory) {
+      if (!guildId) {
+        return {
+          ok: false as const,
+          error: "DISCORD_GUILD_ID não configurado no servidor.",
+        };
+      }
+      const botMe = await discordApi(botToken, "GET", "/users/@me");
+      const botUserId = String(botMe.id);
+      const adminRoleId = Deno.env.get("DISCORD_ADMIN_ROLE_ID");
+      const staffRoleId = Deno.env.get("DISCORD_STAFF_ROLE_ID");
+
+      const permission_overwrites: {
+        id: string;
+        type: 0 | 1;
+        allow: string;
+        deny: string;
+      }[] = [
+        {
+          id: guildId,
+          type: 0,
+          allow: "0",
+          deny: String(VIEW_CHANNEL),
+        },
+        {
+          id: botUserId,
+          type: 1,
+          allow: String(BOT_ALLOW),
+          deny: "0",
+        },
+        {
+          id: user.id,
+          type: 1,
+          allow: String(USER_ALLOW),
+          deny: "0",
+        },
+      ];
+      for (const roleId of [adminRoleId, staffRoleId]) {
+        if (!roleId) continue;
+        permission_overwrites.push({
+          id: roleId,
+          type: 0,
+          allow: String(BOT_ALLOW),
+          deny: "0",
+        });
+      }
+
+      ticketChannel = await discordApi(
+        botToken,
+        "POST",
+        `/guilds/${guildId}/channels`,
+        {
+          name: channelName.slice(0, 100),
+          type: 0,
+          parent_id: threadParentChannelId,
+          topic: `Whitelist · ${displayName} · código ${gameCode}`,
+          permission_overwrites,
+        },
+      );
+    } else if (isForum) {
+      ticketChannel = await discordApi(
         botToken,
         "POST",
         `/channels/${threadParentChannelId}/threads`,
         {
-          name: threadName.slice(0, 100),
+          name: channelName.slice(0, 100),
           auto_archive_duration: 10080,
           message: {
             content: `<@${user.id}> Formulário whitelist · código \`${gameCode}\``,
@@ -303,17 +378,15 @@ async function startWhitelistApplication(opts: {
           },
         },
       );
-      // Starter message id equals thread id in forum channels
-      botMsgId = String(thread.id);
+      botMsgId = String(ticketChannel.id);
     } else {
-      // Text channel: prefer private thread, fall back to public
       try {
-        thread = await discordApi(
+        ticketChannel = await discordApi(
           botToken,
           "POST",
           `/channels/${threadParentChannelId}/threads`,
           {
-            name: threadName,
+            name: channelName,
             type: 12,
             invitable: false,
             auto_archive_duration: 10080,
@@ -321,12 +394,12 @@ async function startWhitelistApplication(opts: {
         );
       } catch (privateErr) {
         console.error("private thread failed, trying public", privateErr);
-        thread = await discordApi(
+        ticketChannel = await discordApi(
           botToken,
           "POST",
           `/channels/${threadParentChannelId}/threads`,
           {
-            name: threadName,
+            name: channelName,
             type: 11,
             auto_archive_duration: 10080,
           },
@@ -336,22 +409,24 @@ async function startWhitelistApplication(opts: {
   } catch (err) {
     return {
       ok: false as const,
-      error: `Falha ao criar thread: ${
+      error: `Falha ao criar ticket: ${
         err instanceof Error ? err.message : "erro"
       }`,
     };
   }
 
-  const threadId = String(thread.id);
+  const ticketId = String(ticketChannel.id);
 
-  try {
-    await discordApi(
-      botToken,
-      "PUT",
-      `/channels/${threadId}/thread-members/${user.id}`,
-    );
-  } catch (err) {
-    console.error("add thread member failed", err);
+  if (!isCategory) {
+    try {
+      await discordApi(
+        botToken,
+        "PUT",
+        `/channels/${ticketId}/thread-members/${user.id}`,
+      );
+    } catch (err) {
+      console.error("add thread member failed", err);
+    }
   }
 
   const { data: application, error: appErr } = await admin
@@ -362,7 +437,7 @@ async function startWhitelistApplication(opts: {
       discord_avatar_url: avatarUrl,
       game_code: gameCode,
       status: "in_progress",
-      discord_thread_id: threadId,
+      discord_thread_id: ticketId,
       current_question_index: 0,
       updated_at: new Date().toISOString(),
     })
@@ -371,7 +446,7 @@ async function startWhitelistApplication(opts: {
 
   if (appErr || !application) {
     try {
-      await discordApi(botToken, "DELETE", `/channels/${threadId}`);
+      await discordApi(botToken, "DELETE", `/channels/${ticketId}`);
     } catch {
       /* ignore */
     }
@@ -386,7 +461,7 @@ async function startWhitelistApplication(opts: {
       const msg = await discordApi(
         botToken,
         "POST",
-        `/channels/${threadId}/messages`,
+        `/channels/${ticketId}/messages`,
         {
           content: `<@${user.id}>`,
           embeds: [firstEmbed],
@@ -408,11 +483,9 @@ async function startWhitelistApplication(opts: {
       .eq("id", application.id);
   }
 
-  void guildId;
-
   return {
     ok: true as const,
-    threadId,
+    threadId: ticketId,
     applicationId: application.id as string,
   };
 }
@@ -509,7 +582,7 @@ Deno.serve(async (req) => {
       return interactionJson({
         type: 4,
         data: {
-          content: `Formulário aberto! Vá até a thread <#${result.threadId}> e responda as perguntas.`,
+          content: `Formulário aberto! Vá até <#${result.threadId}> e responda as perguntas.`,
           flags: 64,
         },
       });
