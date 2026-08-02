@@ -247,19 +247,92 @@ async function startWhitelistApplication(opts: {
     .replace(/^-+|-+$/g, "")
     .slice(0, 90) || `wl-${user.id.slice(-6)}`;
 
-  let thread: Record<string, unknown>;
+  let parentChannel: Record<string, unknown>;
   try {
-    thread = await discordApi(
+    parentChannel = await discordApi(
       botToken,
-      "POST",
-      `/channels/${threadParentChannelId}/threads`,
-      {
-        name: threadName,
-        type: 12,
-        invitable: false,
-        auto_archive_duration: 10080,
-      },
+      "GET",
+      `/channels/${threadParentChannelId}`,
     );
+  } catch (err) {
+    return {
+      ok: false as const,
+      error: `Canal de threads inacessível: ${
+        err instanceof Error ? err.message : "erro"
+      }`,
+    };
+  }
+
+  const parentType = Number(parentChannel.type);
+  // 0 text, 5 announcement, 15 forum, 16 media
+  const isForum = parentType === 15 || parentType === 16;
+  const isTextLike = parentType === 0 || parentType === 5;
+
+  if (!isForum && !isTextLike) {
+    return {
+      ok: false as const,
+      error:
+        `Canal de whitelist inválido (tipo ${parentType}). Use um canal de texto ou fórum.`,
+    };
+  }
+
+  const first = questions[0];
+  const firstEmbed = {
+    title: `Pergunta 1/${questions.length}`,
+    description: first.prompt,
+    color: 0xf2b705,
+    footer: { text: "Responda nesta thread com uma mensagem." },
+  };
+
+  let thread: Record<string, unknown>;
+  let botMsgId: string | null = null;
+
+  try {
+    if (isForum) {
+      // Forum/media: thread + starter message required (no private threads)
+      thread = await discordApi(
+        botToken,
+        "POST",
+        `/channels/${threadParentChannelId}/threads`,
+        {
+          name: threadName.slice(0, 100),
+          auto_archive_duration: 10080,
+          message: {
+            content: `<@${user.id}> Formulário whitelist · código \`${gameCode}\``,
+            embeds: [firstEmbed],
+          },
+        },
+      );
+      // Starter message id equals thread id in forum channels
+      botMsgId = String(thread.id);
+    } else {
+      // Text channel: prefer private thread, fall back to public
+      try {
+        thread = await discordApi(
+          botToken,
+          "POST",
+          `/channels/${threadParentChannelId}/threads`,
+          {
+            name: threadName,
+            type: 12,
+            invitable: false,
+            auto_archive_duration: 10080,
+          },
+        );
+      } catch (privateErr) {
+        console.error("private thread failed, trying public", privateErr);
+        thread = await discordApi(
+          botToken,
+          "POST",
+          `/channels/${threadParentChannelId}/threads`,
+          {
+            name: threadName,
+            type: 11,
+            auto_archive_duration: 10080,
+          },
+        );
+      }
+    }
   } catch (err) {
     return {
       ok: false as const,
@@ -308,28 +381,21 @@ async function startWhitelistApplication(opts: {
     };
   }
 
-  const first = questions[0];
-  let botMsgId: string | null = null;
-  try {
-    const msg = await discordApi(
-      botToken,
-      "POST",
-      `/channels/${threadId}/messages`,
-      {
-        content: `<@${user.id}>`,
-        embeds: [
-          {
-            title: `Pergunta 1/${questions.length}`,
-            description: first.prompt,
-            color: 0xf2b705,
-            footer: { text: "Responda nesta thread com uma mensagem." },
-          },
-        ],
-      },
-    );
-    botMsgId = String(msg.id);
-  } catch (err) {
-    console.error("first question failed", err);
+  if (!botMsgId) {
+    try {
+      const msg = await discordApi(
+        botToken,
+        "POST",
+        `/channels/${threadId}/messages`,
+        {
+          content: `<@${user.id}>`,
+          embeds: [firstEmbed],
+        },
+      );
+      botMsgId = String(msg.id);
+    } catch (err) {
+      console.error("first question failed", err);
+    }
   }
 
   if (botMsgId) {
@@ -342,7 +408,6 @@ async function startWhitelistApplication(opts: {
       .eq("id", application.id);
   }
 
-  // Ensure guild id used (silence unused if same)
   void guildId;
 
   return {

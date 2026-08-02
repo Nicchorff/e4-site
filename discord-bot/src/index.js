@@ -245,9 +245,11 @@ async function handleAnswer(message) {
     answer_text: answerText,
   })
 
-  // Delete user answer + last bot question
+  // Delete user answer + last bot question (skip forum starter msg = thread id)
   const toDelete = [message.id]
-  if (app.last_bot_message_id) toDelete.push(app.last_bot_message_id)
+  if (app.last_bot_message_id && app.last_bot_message_id !== threadId) {
+    toDelete.push(app.last_bot_message_id)
+  }
   try {
     await message.channel.bulkDelete(toDelete, true)
   } catch {
