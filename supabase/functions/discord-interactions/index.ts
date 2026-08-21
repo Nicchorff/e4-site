@@ -11,7 +11,6 @@ import {
   privateTicketOverwrites,
   sanitizeChannelPart,
   SUPPORT_KIND_LABEL,
-  syncTicketCategoryVisibility,
   uniqueIds,
   type SupportTicketKind,
 } from "../_shared/discord-tickets.ts";
@@ -100,6 +99,7 @@ type Interaction = {
   type: number;
   id?: string;
   token?: string;
+  application_id?: string;
   guild_id?: string;
   channel_id?: string;
   member?: InteractionMember;
@@ -116,6 +116,25 @@ type Interaction = {
     }>;
   };
 };
+
+async function editOriginalInteraction(
+  applicationId: string,
+  token: string,
+  content: string,
+) {
+  const res = await fetch(
+    `https://discord.com/api/v10/webhooks/${applicationId}/${token}/messages/@original`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("editOriginalInteraction failed", res.status, text);
+  }
+}
 
 async function loadViewerRoleIds(
   admin: ReturnType<typeof createClient>,
@@ -154,10 +173,9 @@ type SupportTicketRow = {
 async function startSupportTicket(opts: {
   admin: ReturnType<typeof createClient>;
   botToken: string;
+  botUserId: string;
   guildId: string;
   categoryOpenId: string;
-  categoryInProgressId: string;
-  categoryFinishedId: string;
   adminRoleId: string;
   staffRoleId: string;
   viewerRoleIds: string[];
@@ -208,24 +226,15 @@ async function startSupportTicket(opts: {
     `${opts.kind}-${sanitizeChannelPart(displayName)}-${shortId}`.slice(0, 100);
   const kindLabel = SUPPORT_KIND_LABEL[opts.kind];
 
-  const botMe = await discordApi(opts.botToken, "GET", "/users/@me");
-  const botUserId = String(botMe.id);
+  let botUserId = opts.botUserId;
+  if (!botUserId) {
+    const botMe = await discordApi(opts.botToken, "GET", "/users/@me");
+    botUserId = String(botMe.id);
+  }
   const staffRoleIds = uniqueIds(opts.viewerRoleIds, [
     opts.adminRoleId,
     opts.staffRoleId,
   ]);
-
-  try {
-    await syncTicketCategoryVisibility(
-      opts.botToken,
-      opts.guildId,
-      [opts.categoryOpenId, opts.categoryInProgressId, opts.categoryFinishedId],
-      staffRoleIds,
-      botUserId,
-    );
-  } catch (err) {
-    console.error("category visibility sync failed", err);
-  }
 
   let channel: Record<string, unknown>;
   try {
@@ -997,13 +1006,100 @@ Deno.serve(async (req) => {
     return interactionJson({ type: 1 });
   }
 
+  if (
+    interaction.type === 5 &&
+    (interaction.data?.custom_id ?? "").startsWith("ticket_modal:")
+  ) {
+    const applicationId = interaction.application_id ?? "";
+    const interactionToken = interaction.token ?? "";
+    const customId = interaction.data?.custom_id ?? "";
+
+    EdgeRuntime.waitUntil(
+      (async () => {
+        const reply = async (content: string) => {
+          if (!applicationId || !interactionToken) return;
+          await editOriginalInteraction(
+            applicationId,
+            interactionToken,
+            content,
+          );
+        };
+        try {
+          const kindRaw = customId.slice("ticket_modal:".length);
+          if (!isSupportTicketKind(kindRaw)) {
+            await reply("Tipo de ticket inválido.");
+            return;
+          }
+
+          const rows = interaction.data?.components ?? [];
+          let subject = "";
+          let description = "";
+          for (const row of rows) {
+            for (const comp of row.components ?? []) {
+              if (comp.custom_id === "ticket_subject") {
+                subject = (comp.value ?? "").trim();
+              }
+              if (comp.custom_id === "ticket_body") {
+                description = (comp.value ?? "").trim();
+              }
+            }
+          }
+
+          const admin = createClient(supabaseUrl, serviceKey);
+          const cfg = await withCeoAdminRole(
+            await loadDiscordRuntimeConfig(admin),
+            botToken,
+          );
+          if (
+            cfg.guildId &&
+            interaction.guild_id &&
+            interaction.guild_id !== cfg.guildId
+          ) {
+            await reply("Guild não autorizado.");
+            return;
+          }
+
+          const viewerRoleIds = await loadViewerRoleIds(admin);
+          const result = await startSupportTicket({
+            admin,
+            botToken,
+            botUserId: applicationId,
+            guildId: interaction.guild_id ?? cfg.guildId ?? "",
+            categoryOpenId: cfg.categoryOpenId,
+            adminRoleId: cfg.adminRoleId,
+            staffRoleId: cfg.staffRoleId,
+            viewerRoleIds,
+            member: interaction.member,
+            kind: kindRaw,
+            subject,
+            body: description,
+          });
+
+          if (!result.ok) {
+            await reply(result.error);
+            return;
+          }
+          await reply(
+            `Ticket aberto em <#${result.channelId}>. A staff vai te atender por lá.`,
+          );
+        } catch (err) {
+          console.error("ticket_modal failed", err);
+          await reply(
+            err instanceof Error ? err.message : "Falha ao abrir o ticket.",
+          );
+        }
+      })(),
+    );
+
+    return interactionJson({ type: 5, data: { flags: 64 } });
+  }
+
   const admin = createClient(supabaseUrl, serviceKey);
   const cfg = await withCeoAdminRole(
     await loadDiscordRuntimeConfig(admin),
     botToken,
   );
   const guildIdEnv = cfg.guildId;
-  const categoryOpenId = cfg.categoryOpenId;
   const categoryInProgress = cfg.categoryInProgressId;
   const categoryFinished = cfg.categoryFinishedId;
   const adminRoleId = cfg.adminRoleId;
@@ -1096,61 +1192,6 @@ Deno.serve(async (req) => {
         data: {
           content:
             "Acesso liberado. Sua key foi vinculada ao código do jogo. Entre no servidor.",
-          flags: 64,
-        },
-      });
-    }
-
-    if (customId.startsWith("ticket_modal:")) {
-      const kindRaw = customId.slice("ticket_modal:".length);
-      if (!isSupportTicketKind(kindRaw)) {
-        return interactionJson({
-          type: 4,
-          data: { content: "Tipo de ticket inválido.", flags: 64 },
-        });
-      }
-
-      const rows = interaction.data?.components ?? [];
-      let subject = "";
-      let description = "";
-      for (const row of rows) {
-        for (const comp of row.components ?? []) {
-          if (comp.custom_id === "ticket_subject") {
-            subject = (comp.value ?? "").trim();
-          }
-          if (comp.custom_id === "ticket_body") {
-            description = (comp.value ?? "").trim();
-          }
-        }
-      }
-
-      const result = await startSupportTicket({
-        admin,
-        botToken,
-        guildId: interaction.guild_id ?? guildIdEnv ?? "",
-        categoryOpenId,
-        categoryInProgressId: categoryInProgress,
-        categoryFinishedId: categoryFinished,
-        adminRoleId,
-        staffRoleId,
-        viewerRoleIds,
-        member: interaction.member,
-        kind: kindRaw,
-        subject,
-        body: description,
-      });
-
-      if (!result.ok) {
-        return interactionJson({
-          type: 4,
-          data: { content: result.error, flags: 64 },
-        });
-      }
-
-      return interactionJson({
-        type: 4,
-        data: {
-          content: `Ticket aberto em <#${result.channelId}>. A staff vai te atender por lá.`,
           flags: 64,
         },
       });
