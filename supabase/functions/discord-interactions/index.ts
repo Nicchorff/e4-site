@@ -1384,9 +1384,6 @@ Deno.serve(async (req) => {
       });
     }
 
-      });
-    }
-
     if (interaction.type === 3 && customId.startsWith("ticket_claim:")) {
       const ticketId = customId.slice("ticket_claim:".length);
       if (!memberMayModerate(member, viewerRoleIds, adminRoleId, staffRoleId)) {
