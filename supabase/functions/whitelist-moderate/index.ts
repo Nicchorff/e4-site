@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { loadDiscordRuntimeConfig } from "../_shared/discord-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -149,19 +150,8 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const botToken = Deno.env.get("DISCORD_BOT_TOKEN");
-    const guildId = Deno.env.get("DISCORD_GUILD_ID");
-    const resultFormChannel =
-      Deno.env.get("DISCORD_WL_RESULT_FORM_CHANNEL_ID") ??
-      "1533252788908462231";
-    const resultInterviewChannel =
-      Deno.env.get("DISCORD_WL_RESULT_INTERVIEW_CHANNEL_ID") ??
-      "1527449034715828225";
-    const interviewRoleId =
-      Deno.env.get("DISCORD_WL_INTERVIEW_ROLE_ID") ?? "1509730162546184312";
-    const approvedRoleId =
-      Deno.env.get("DISCORD_WL_APPROVED_ROLE_ID") ?? "1527875867358007448";
 
-    if (!supabaseUrl || !anonKey || !serviceKey || !botToken || !guildId) {
+    if (!supabaseUrl || !anonKey || !serviceKey || !botToken) {
       return json({ error: "Missing server configuration" }, 500);
     }
 
@@ -178,6 +168,16 @@ Deno.serve(async (req) => {
     if (userError || !user) return json({ error: "Unauthorized" }, 401);
 
     const admin = createClient(supabaseUrl, serviceKey);
+    const cfg = await loadDiscordRuntimeConfig(admin);
+    const guildId = cfg.guildId;
+    const resultFormChannel = cfg.wlResultFormChannelId;
+    const resultInterviewChannel = cfg.wlResultInterviewChannelId;
+    const interviewRoleId = cfg.interviewRoleId;
+    const approvedRoleId = cfg.approvedRoleId;
+
+    if (!guildId || !resultFormChannel || !interviewRoleId || !approvedRoleId) {
+      return json({ error: "Discord guild config missing. Run bot setup." }, 500);
+    }
 
     const { data: profile } = await admin
       .from("profiles")

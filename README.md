@@ -39,9 +39,11 @@ No Dashboard → Edge Functions → Secrets:
 | Secret | Uso |
 |---|---|
 | `DISCORD_BOT_TOKEN` | Token do bot E4 (leitura de membros) |
-| `DISCORD_GUILD_ID` | ID do servidor Discord |
-| `DISCORD_ADMIN_ROLE_ID` | Cargo → `role = admin` |
-| `DISCORD_STAFF_ROLE_ID` | Cargo → `role = staff` |
+| `DISCORD_GUILD_ID` | ID do servidor (opcional se o bot já gravou `discord_runtime_config`) |
+| `DISCORD_ADMIN_ROLE_ID` | Cargo → `role = admin` (idem) |
+| `DISCORD_STAFF_ROLE_ID` | Cargo → `role = staff` (idem) |
+
+Troca de servidor: convide o bot existente, rode `npm run setup-guild` em `discord-bot/` (ou suba o app no EasyPanel). O bot cria cargos/canais e grava os IDs. Deploy EasyPanel: [docs/deploy-easypanel.md](docs/deploy-easypanel.md) (`docker-compose.easypanel.yml`).
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY` já existem no runtime das functions.
 

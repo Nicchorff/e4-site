@@ -8,14 +8,20 @@ Projeto Supabase: `site` (`dppyamtmjzmmkzjlmiew`).
 
 ## Canais e cargos (IDs)
 
-| Uso | ID |
+Não hardcode IDs do servidor antigo. No guild **novo**, o bot cria (ou reusa pelo nome):
+
+| Nome | Uso |
 | --- | --- |
-| Canal embed / botão | `1509568568948293773` |
-| Canal threads (formulário) | `1509568521129033973` |
-| Resultado formulário | `1533252788908462231` |
-| Resultado entrevista | `1527449034715828225` |
-| Cargo entrevista | `1509730162546184312` |
-| Cargo aprovado | `1527875867358007448` |
+| `Admin` / `Staff` | Sync de cargos no site + tickets |
+| `Entrevista` / `Aprovado` | Whitelist |
+| `#whitelist-formulario` | Embed + botão |
+| `#whitelist-threads` | Threads privadas do formulário |
+| `#resultado-formulario` / `#resultado-entrevista` | Resultados |
+| Categorias `Ticket \| Aberto` / `Em andamento` / `Finalizado` | Loja |
+
+IDs vão para `public.discord_runtime_config` (o bot grava no start / `npm run setup-guild` / `!e4-setup`). Secrets `DISCORD_*` no Supabase **sobrescrevem** a tabela se estiverem preenchidos.
+
+Convide o bot existente (não crie outra Application). No start, os logs imprimem o bloco de env e o invite `discord.gg`.
 
 ---
 
@@ -34,17 +40,17 @@ Projeto Supabase: `site` (`dppyamtmjzmmkzjlmiew`).
 
 ## Secrets (Supabase Edge Functions)
 
-Além dos secrets Discord já usados (doações):
+Além dos secrets Discord já usados (doações). Se o bot já gravou `discord_runtime_config`, estes IDs são opcionais:
 
 ```
-DISCORD_WL_FORM_CHANNEL_ID=1509568568948293773
-DISCORD_WL_THREAD_CHANNEL_ID=1509568521129033973
-DISCORD_WL_RESULT_FORM_CHANNEL_ID=1533252788908462231
-DISCORD_WL_RESULT_INTERVIEW_CHANNEL_ID=1527449034715828225
-DISCORD_WL_INTERVIEW_ROLE_ID=1509730162546184312
-DISCORD_WL_APPROVED_ROLE_ID=1527875867358007448
+DISCORD_WL_FORM_CHANNEL_ID=
+DISCORD_WL_THREAD_CHANNEL_ID=
+DISCORD_WL_RESULT_FORM_CHANNEL_ID=
+DISCORD_WL_RESULT_INTERVIEW_CHANNEL_ID=
+DISCORD_WL_INTERVIEW_ROLE_ID=
+DISCORD_WL_APPROVED_ROLE_ID=
 FIVEM_WHITELIST_URL=http://104.234.63.28:30120/vrp/whitelist
-FIVEM_WHITELIST_TOKEN=1111.892334344.53564453125
+FIVEM_WHITELIST_TOKEN=
 ```
 
 Deploy das functions:
@@ -72,39 +78,31 @@ Precisa de **Gateway** (Message Content Intent) para ler respostas nas threads. 
 Copie `discord-bot/.env.example` → `.env` (ou use Environment Variables no EasyPanel):
 
 ```
-DISCORD_BOT_TOKEN=          # Discord Developer Portal → Bot → Reset/Copy Token
-DISCORD_GUILD_ID=           # Clique direito no servidor → Copiar ID
+DISCORD_BOT_TOKEN=          # Discord Developer Portal → Bot → Copy Token
+DISCORD_GUILD_ID=           # Clique direito no servidor NOVO → Copiar ID
 SUPABASE_URL=https://dppyamtmjzmmkzjlmiew.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=  # Supabase → Project Settings → API → service_role
-DISCORD_WL_FORM_CHANNEL_ID=1509568568948293773
-DISCORD_WL_THREAD_CHANNEL_ID=1509568521129033973
+# Canais opcionais — o bot cria no start se vazios
+DISCORD_WL_FORM_CHANNEL_ID=
+DISCORD_WL_THREAD_CHANNEL_ID=
 ```
 
-### EasyPanel (app separado do site)
+### EasyPanel
 
-O site estático **não** roda o Gateway. Crie **outro app** só para o bot:
+Mesmo repo, app separado **ou** Compose — ver [deploy-easypanel.md](./deploy-easypanel.md). Env mínimo do bot: token, `DISCORD_GUILD_ID`, `SUPABASE_URL`, service role. No start o bot cria a estrutura do guild e grava IDs.
 
-1. No mesmo projeto EasyPanel → **+ Create** → **App**
-2. Source: mesmo repo GitHub (`Nicchorff/e4-site`), branch `main`
-3. Build:
-   - **Dockerfile path:** `discord-bot/Dockerfile`
-   - **Docker context / Build context:** raiz do repo (`.`) — o Dockerfile já faz `COPY discord-bot/...`
-4. **Ports:** não precisa expor porta (é worker Gateway, não HTTP)
-5. **Environment** (Runtime **e/ou** Build Args no EasyPanel) — cole as variáveis do bloco acima (token, guild, service role + IDs dos canais). O Dockerfile aceita as duas formas.
-6. Deploy / Restart
-7. Nos logs deve aparecer algo como: `Whitelist bot ready as ...` e `Posted/Updated whitelist form embed`
-
-Reinicie o app sempre que mudar env.
+Logs: `Whitelist bot ready`, bloco `copy to EasyPanel / Supabase secrets`, `Posted/Updated whitelist form embed`.
 
 ### Rodar local
 
 ```bash
 cd discord-bot
 npm install
+npm run setup-guild   # cria cargos/canais + slash (bot já no guild)
 npm start
 ```
 
-No start, o bot posta ou edita o embed no canal do formulário. Depois de editar o embed no admin (`/admin/whitelist/perguntas`), um admin pode digitar `!wl-refresh-embed` nesse canal para republicar.
+No start, o bot posta ou edita o embed no canal do formulário. Admin: `!wl-refresh-embed` no canal do form, ou `!e4-setup` para recriar/atualizar a estrutura.
 
 ---
 
@@ -124,6 +122,7 @@ No start, o bot posta ou edita o embed no canal do formulário. Depois de editar
 - `whitelist_embed_settings` (singleton id=1)
 - `whitelist_applications`
 - `whitelist_answers`
+- `discord_runtime_config` (IDs do guild atual; o bot preenche)
 
 Escritas de application/answers: service role (Edge + bot). Admin lê via RLS `is_admin()`.
 

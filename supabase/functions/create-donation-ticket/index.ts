@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { loadDiscordRuntimeConfig } from "../_shared/discord-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -137,21 +138,8 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const botToken = Deno.env.get("DISCORD_BOT_TOKEN");
-    const guildId = Deno.env.get("DISCORD_GUILD_ID");
-    const categoryOpenId = Deno.env.get("DISCORD_CATEGORY_OPEN_ID");
-    const categoryInProgressId = Deno.env.get("DISCORD_CATEGORY_IN_PROGRESS_ID");
-    const categoryFinishedId = Deno.env.get("DISCORD_CATEGORY_FINISHED_ID");
-    const adminRoleId = Deno.env.get("DISCORD_ADMIN_ROLE_ID");
-    const staffRoleId = Deno.env.get("DISCORD_STAFF_ROLE_ID");
 
-    if (
-      !supabaseUrl ||
-      !anonKey ||
-      !serviceKey ||
-      !botToken ||
-      !guildId ||
-      !categoryOpenId
-    ) {
+    if (!supabaseUrl || !anonKey || !serviceKey || !botToken) {
       return json({ error: "Missing server configuration" }, 500);
     }
 
@@ -176,6 +164,17 @@ Deno.serve(async (req) => {
     }
 
     const admin = createClient(supabaseUrl, serviceKey);
+    const cfg = await loadDiscordRuntimeConfig(admin);
+    const guildId = cfg.guildId;
+    const categoryOpenId = cfg.categoryOpenId;
+    const categoryInProgressId = cfg.categoryInProgressId;
+    const categoryFinishedId = cfg.categoryFinishedId;
+    const adminRoleId = cfg.adminRoleId;
+    const staffRoleId = cfg.staffRoleId;
+
+    if (!guildId || !categoryOpenId) {
+      return json({ error: "Discord guild config missing. Run bot setup." }, 500);
+    }
 
     const botMe = await discordApi(botToken, "GET", "/users/@me");
     const botUserId = String(botMe.id);

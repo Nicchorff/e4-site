@@ -128,7 +128,7 @@ npx supabase functions deploy discord-interactions --project-ref dppyamtmjzmmkzj
 
 ## 5. Registrar slash command
 
-Com o bot token e o **Application ID** (Client ID):
+O comando de guild é registrado automaticamente no start do bot (`setup-guild` / `!e4-setup`). Manual:
 
 ```bash
 curl -X POST "https://discord.com/api/v10/applications/<APP_ID>/guilds/<GUILD_ID>/commands" \

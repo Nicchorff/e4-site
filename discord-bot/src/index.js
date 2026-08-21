@@ -9,12 +9,21 @@ import {
   Events,
 } from 'discord.js'
 import { createClient } from '@supabase/supabase-js'
+import {
+  botInviteUrl,
+  ensureGuildSetup,
+  loadDotEnv,
+  persistRuntimeConfig,
+  printEnvBlock,
+  registerSlashCommand,
+} from './setup-guild.js'
+
+loadDotEnv()
 
 const token = process.env.DISCORD_BOT_TOKEN
 const supabaseUrl = process.env.SUPABASE_URL
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-const formChannelId =
-  process.env.DISCORD_WL_FORM_CHANNEL_ID ?? '1509568568948293773'
+let formChannelId = process.env.DISCORD_WL_FORM_CHANNEL_ID || ''
 
 if (!token || !supabaseUrl || !serviceKey) {
   console.error(
@@ -332,6 +341,35 @@ setInterval(() => {
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`Whitelist bot ready as ${c.user.tag}`)
+  const guildId =
+    process.env.DISCORD_GUILD_ID || c.guilds.cache.first()?.id || ''
+  if (!guildId) {
+    console.error(
+      `Bot is in no guild. Invite it, then restart:\n${botInviteUrl(c.user.id)}`,
+    )
+  } else {
+    try {
+      const ids = await ensureGuildSetup({
+        rest: c.rest,
+        guildId,
+        botUserId: c.user.id,
+      })
+      formChannelId = ids.formChannelId
+      process.env.DISCORD_WL_FORM_CHANNEL_ID = ids.formChannelId
+      process.env.DISCORD_WL_THREAD_CHANNEL_ID = ids.threadChannelId
+      process.env.DISCORD_GUILD_ID = guildId
+      printEnvBlock(ids)
+      await persistRuntimeConfig(supabase, ids)
+      await registerSlashCommand(c.rest, c.user.id, guildId)
+    } catch (err) {
+      console.error('Guild setup failed', err?.message ?? err)
+    }
+  }
+  if (!formChannelId) {
+    console.error(
+      'No whitelist form channel. Set DISCORD_WL_FORM_CHANNEL_ID or fix guild setup.',
+    )
+  }
   await loadActiveApplications()
   await ensureFormEmbed()
 })
@@ -342,20 +380,47 @@ client.on(Events.MessageCreate, (message) => {
   )
 })
 
-// Allow admin to refresh embed via typing "wl-refresh-embed" in form channel (bot owner only optional)
 client.on(Events.MessageCreate, async (message) => {
-  if (message.channelId !== formChannelId) return
   if (message.author.bot) return
-  if (message.content.trim() !== '!wl-refresh-embed') return
+  const cmd = message.content.trim()
+  if (cmd !== '!wl-refresh-embed' && cmd !== '!e4-setup') return
 
   const member = message.member
   if (!member?.permissions.has('Administrator')) {
-    await message.reply('Só administradores podem atualizar o embed.').catch(
+    await message.reply('Só administradores podem usar este comando.').catch(
       () => null,
     )
     return
   }
 
+  if (cmd === '!e4-setup') {
+    const guildId = message.guild?.id || process.env.DISCORD_GUILD_ID
+    if (!guildId || !client.user) {
+      await message.reply('Bot sem guild.').catch(() => null)
+      return
+    }
+    await message.delete().catch(() => null)
+    try {
+      const ids = await ensureGuildSetup({
+        rest: client.rest,
+        guildId,
+        botUserId: client.user.id,
+      })
+      formChannelId = ids.formChannelId
+      printEnvBlock(ids)
+      await persistRuntimeConfig(supabase, ids)
+      await registerSlashCommand(client.rest, client.user.id, guildId)
+      await ensureFormEmbed()
+      await message.channel.send(
+        `Setup ok. Form: <#${ids.formChannelId}> · invite: ${ids.inviteUrl || 'n/a'}`,
+      )
+    } catch (err) {
+      await message.channel.send(`Setup falhou: ${err?.message ?? err}`)
+    }
+    return
+  }
+
+  if (message.channelId !== formChannelId) return
   await message.delete().catch(() => null)
   await ensureFormEmbed()
 })

@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import nacl from "https://esm.sh/tweetnacl@1.0.3";
+import { loadDiscordRuntimeConfig } from "../_shared/discord-config.ts";
 
 function hexToUint8Array(hex: string) {
   if (hex.length % 2 !== 0) throw new Error("Invalid hex");
@@ -186,9 +187,19 @@ async function startWhitelistApplication(opts: {
   threadParentChannelId: string;
   member: InteractionMember | undefined;
   gameCode: string;
+  adminRoleId: string;
+  staffRoleId: string;
 }) {
-  const { admin, botToken, guildId, threadParentChannelId, member, gameCode } =
-    opts;
+  const {
+    admin,
+    botToken,
+    guildId,
+    threadParentChannelId,
+    member,
+    gameCode,
+    adminRoleId,
+    staffRoleId,
+  } = opts;
 
   const user = member?.user;
   if (!user?.id) {
@@ -314,8 +325,6 @@ async function startWhitelistApplication(opts: {
       }
       const botMe = await discordApi(botToken, "GET", "/users/@me");
       const botUserId = String(botMe.id);
-      const adminRoleId = Deno.env.get("DISCORD_ADMIN_ROLE_ID");
-      const staffRoleId = Deno.env.get("DISCORD_STAFF_ROLE_ID");
 
       const permission_overwrites: {
         id: string;
@@ -500,13 +509,6 @@ Deno.serve(async (req) => {
 
   const publicKey = Deno.env.get("DISCORD_PUBLIC_KEY");
   const botToken = Deno.env.get("DISCORD_BOT_TOKEN");
-  const guildIdEnv = Deno.env.get("DISCORD_GUILD_ID");
-  const categoryInProgress = Deno.env.get("DISCORD_CATEGORY_IN_PROGRESS_ID");
-  const categoryFinished = Deno.env.get("DISCORD_CATEGORY_FINISHED_ID");
-  const adminRoleId = Deno.env.get("DISCORD_ADMIN_ROLE_ID");
-  const staffRoleId = Deno.env.get("DISCORD_STAFF_ROLE_ID");
-  const wlThreadChannelId =
-    Deno.env.get("DISCORD_WL_THREAD_CHANNEL_ID") ?? "1509568521129033973";
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -539,6 +541,15 @@ Deno.serve(async (req) => {
     return interactionJson({ type: 1 });
   }
 
+  const admin = createClient(supabaseUrl, serviceKey);
+  const cfg = await loadDiscordRuntimeConfig(admin);
+  const guildIdEnv = cfg.guildId;
+  const categoryInProgress = cfg.categoryInProgressId;
+  const categoryFinished = cfg.categoryFinishedId;
+  const adminRoleId = cfg.adminRoleId;
+  const staffRoleId = cfg.staffRoleId;
+  const wlThreadChannelId = cfg.wlThreadChannelId;
+
   if (guildIdEnv && interaction.guild_id && interaction.guild_id !== guildIdEnv) {
     return interactionJson({
       type: 4,
@@ -546,7 +557,6 @@ Deno.serve(async (req) => {
     });
   }
 
-  const admin = createClient(supabaseUrl, serviceKey);
   const viewerRoleIds = await loadViewerRoleIds(admin);
 
   // MODAL_SUBMIT — whitelist form
@@ -570,6 +580,8 @@ Deno.serve(async (req) => {
         threadParentChannelId: wlThreadChannelId,
         member: interaction.member,
         gameCode,
+        adminRoleId,
+        staffRoleId,
       });
 
       if (!result.ok) {

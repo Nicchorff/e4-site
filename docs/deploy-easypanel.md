@@ -40,10 +40,44 @@ docker run --rm -p 8080:80 e4-site
 
 ## EasyPanel
 
+Repo GitHub: `Nicchorff/e4-site`, branch `main`. Projeto sugerido: `sites`.
+
+### Opção A — Compose (um app, dois serviços)
+
+1. Create → App → **Docker Compose**
+2. Compose file: `docker-compose.easypanel.yml` (context = raiz)
+3. Environment / build args:
+
+```
+VITE_SITE_URL=https://SEU_DOMINIO
+VITE_SUPABASE_URL=https://dppyamtmjzmmkzjlmiew.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRwcHlhbXRtanptbWt6amxtaWV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxNzYxMTQsImV4cCI6MjEwMDc1MjExNH0.KirZOIr4WNisd8eqPMvv0lwp7fvRGZZvOzrvjPsgAvg
+VITE_DISCORD_INVITE_URL=https://discord.gg/SEU_INVITE
+DISCORD_BOT_TOKEN=
+DISCORD_GUILD_ID=
+SUPABASE_URL=https://dppyamtmjzmmkzjlmiew.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+4. Domínio no serviço `web` (porta 80). O `discord-bot` não expõe porta.
+
+### Opção B — dois apps Dockerfile
+
+**Site**
+
 1. App type **Dockerfile** (raiz do repo).
 2. Expose porta **80**; HTTPS no proxy do painel.
-3. Configure os **build arguments** da tabela acima (rebuild após mudar qualquer `VITE_*`).
+3. **Build arguments** da tabela acima (rebuild após mudar qualquer `VITE_*`).
 4. Healthcheck já existe no Dockerfile (`wget` em `/`).
+
+**Bot** (app separado)
+
+1. Dockerfile path: `discord-bot/Dockerfile`
+2. Build context: `.`
+3. Sem porta
+4. Environment: `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+
+No primeiro start o bot cria cargos/canais no guild, registra `/comprovante-aprovado` e grava IDs em `discord_runtime_config`. Logs devem ter `Whitelist bot ready` e o bloco `copy to EasyPanel / Supabase secrets`.
 
 ## DNS
 
