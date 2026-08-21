@@ -25,7 +25,8 @@ const supabaseUrl = process.env.SUPABASE_URL
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 let formChannelId = process.env.DISCORD_WL_FORM_CHANNEL_ID || ''
 let betaAccessChannelId = process.env.DISCORD_BETA_ACCESS_CHANNEL_ID || ''
-let ticketPanelChannelId = process.env.DISCORD_TICKET_PANEL_CHANNEL_ID || ''
+let ticketPanelChannelId =
+  process.env.DISCORD_TICKET_PANEL_CHANNEL_ID || '1534356212773032006'
 
 if (!token || !supabaseUrl || !serviceKey) {
   console.error(

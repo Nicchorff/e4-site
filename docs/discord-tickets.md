@@ -29,9 +29,9 @@ Um membro só pode ter **um** ticket de suporte `open` / `in_progress` por vez. 
 
 ---
 
-## Canal #tickets
+## Canal do painel
 
-Criado no `setup-guild` / start do bot / `!e4-setup`. `@everyone` vê o canal e não envia mensagens (só botões). ID em `discord_runtime_config.ticket_panel_channel_id` (secret opcional `DISCORD_TICKET_PANEL_CHANNEL_ID`).
+O embed com os 3 botões vai no canal **`1534356212773032006`** (`DISCORD_TICKET_PANEL_CHANNEL_ID`). O bot só posta/atualiza a mensagem; não cria outro `#tickets`. ID também fica em `discord_runtime_config.ticket_panel_channel_id`.
 
 ---
 

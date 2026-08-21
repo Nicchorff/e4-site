@@ -19,6 +19,7 @@ export type DiscordRuntimeConfig = {
 };
 
 export const DEFAULT_BETA_ACCESS_CATEGORY_ID = "1534358251867607071";
+export const DEFAULT_TICKET_PANEL_CHANNEL_ID = "1534356212773032006";
 
 function pick(envKey: string, dbVal?: string | null) {
   return (Deno.env.get(envKey) || dbVal || "").trim();
@@ -101,9 +102,8 @@ export async function loadDiscordRuntimeConfig(
       "DISCORD_BETA_ACCESS_CHANNEL_ID",
       data?.beta_access_channel_id,
     ),
-    ticketPanelChannelId: pick(
-      "DISCORD_TICKET_PANEL_CHANNEL_ID",
-      data?.ticket_panel_channel_id,
-    ),
+    ticketPanelChannelId:
+      pick("DISCORD_TICKET_PANEL_CHANNEL_ID", data?.ticket_panel_channel_id) ||
+      DEFAULT_TICKET_PANEL_CHANNEL_ID,
   };
 }

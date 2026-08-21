@@ -45,6 +45,7 @@ const WL_CHANNELS = [
 ]
 
 const DEFAULT_BETA_ACCESS_CATEGORY_ID = '1534358251867607071'
+const DEFAULT_TICKET_PANEL_CHANNEL_ID = '1534356212773032006'
 const BETA_CHANNEL_NAME = '🔴liberar-acesso-beta'
 const BETA_CHANNEL_MATCH = 'liberar-acesso-beta'
 const TICKET_PANEL_CHANNEL_NAME = 'tickets'
@@ -504,46 +505,28 @@ export async function ensureGuildSetup({ rest, guildId, botUserId }) {
     )
   }
 
-  const existingTicketPanel = channels.find((ch) => {
-    const name = String(ch.name || '').toLowerCase()
-    return ch.type === ChannelType.GuildText && name === TICKET_PANEL_CHANNEL_MATCH
-  })
+  const ticketPanelWantedId =
+    process.env.DISCORD_TICKET_PANEL_CHANNEL_ID ||
+    DEFAULT_TICKET_PANEL_CHANNEL_ID
+  const existingTicketPanel =
+    channels.find(
+      (ch) =>
+        ch.type === ChannelType.GuildText && ch.id === ticketPanelWantedId,
+    ) ||
+    channels.find((ch) => {
+      const name = String(ch.name || '').toLowerCase()
+      return (
+        ch.type === ChannelType.GuildText && name === TICKET_PANEL_CHANNEL_MATCH
+      )
+    })
   if (existingTicketPanel) {
     ids.ticketPanelChannelId = existingTicketPanel.id
-    console.log(`Reusing channel #${existingTicketPanel.name} ${existingTicketPanel.id}`)
+    console.log(
+      `Using ticket panel #${existingTicketPanel.name} ${existingTicketPanel.id}`,
+    )
   } else {
-    try {
-      const created = /** @type {{ id: string, name: string, type: number }} */ (
-        await rest.post(Routes.guildChannels(guildId), {
-          body: {
-            name: TICKET_PANEL_CHANNEL_NAME,
-            type: ChannelType.GuildText,
-            topic: 'Abra um ticket de dúvida, suporte ou reporte.',
-            permission_overwrites: [
-              ticketPanelEveryoneOverwrite(guildId),
-              ticketPanelBotOverwrite(botUserId),
-              ...staffRoleIds.map(ticketPanelStaffOverwrite),
-            ],
-          },
-        })
-      )
-      ids.ticketPanelChannelId = created.id
-      channels.push(created)
-      console.log(`Created channel #${created.name} ${created.id}`)
-    } catch (err) {
-      console.error(
-        `Failed creating ticket panel channel: ${discordErr(err)}`,
-      )
-    }
-    await sleep(350)
-  }
-  if (ids.ticketPanelChannelId) {
-    await applyTicketPanelOverwrites(
-      rest,
-      ids.ticketPanelChannelId,
-      guildId,
-      botUserId,
-      staffRoleIds,
+    console.warn(
+      `Ticket panel channel ${ticketPanelWantedId} not found. Set DISCORD_TICKET_PANEL_CHANNEL_ID.`,
     )
   }
 
