@@ -116,6 +116,75 @@ function discordErr(err) {
   return code != null ? `${msg} (code ${code})` : msg
 }
 
+function betaBotOverwrite(botUserId) {
+  return {
+    id: botUserId,
+    type: 1,
+    allow: (
+      PermissionFlagsBits.ViewChannel |
+      PermissionFlagsBits.SendMessages |
+      PermissionFlagsBits.EmbedLinks |
+      PermissionFlagsBits.AttachFiles |
+      PermissionFlagsBits.ReadMessageHistory |
+      PermissionFlagsBits.ManageMessages
+    ).toString(),
+    deny: '0',
+  }
+}
+
+function betaEveryoneOverwrite(guildId) {
+  return {
+    id: guildId,
+    type: 0,
+    allow: (
+      PermissionFlagsBits.ViewChannel |
+      PermissionFlagsBits.ReadMessageHistory
+    ).toString(),
+    deny: PermissionFlagsBits.SendMessages.toString(),
+  }
+}
+
+function betaStaffOverwrite(roleId) {
+  return {
+    id: roleId,
+    type: 0,
+    allow: (
+      PermissionFlagsBits.ViewChannel |
+      PermissionFlagsBits.SendMessages |
+      PermissionFlagsBits.ReadMessageHistory |
+      PermissionFlagsBits.ManageMessages
+    ).toString(),
+    deny: '0',
+  }
+}
+
+async function applyBetaChannelOverwrites(
+  rest,
+  channelId,
+  guildId,
+  botUserId,
+  staffRoleIds,
+) {
+  try {
+    await rest.put(`/channels/${channelId}/permissions/${botUserId}`, {
+      body: betaBotOverwrite(botUserId),
+    })
+    await rest.put(`/channels/${channelId}/permissions/${guildId}`, {
+      body: betaEveryoneOverwrite(guildId),
+    })
+    for (const roleId of staffRoleIds) {
+      await rest.put(`/channels/${channelId}/permissions/${roleId}`, {
+        body: betaStaffOverwrite(roleId),
+      })
+    }
+    console.log(`Opened beta channel ${channelId} for @everyone + bot`)
+  } catch (err) {
+    console.warn(
+      `Could not set beta channel permissions on ${channelId}: ${discordErr(err)}. Move the E4 bot role to the top of the role list.`,
+    )
+  }
+}
+
 async function tryApplyTicketOverwrites(
   rest,
   categoryId,
@@ -330,6 +399,11 @@ export async function ensureGuildSetup({ rest, guildId, botUserId }) {
               type: ChannelType.GuildText,
               parent_id: betaCategory.id,
               topic: 'Informe a key do beta e o código do jogo para liberar o acesso.',
+              permission_overwrites: [
+                betaEveryoneOverwrite(guildId),
+                betaBotOverwrite(botUserId),
+                ...staffRoleIds.map(betaStaffOverwrite),
+              ],
             },
           })
         )
@@ -342,6 +416,15 @@ export async function ensureGuildSetup({ rest, guildId, botUserId }) {
         )
       }
       await sleep(350)
+    }
+    if (ids.betaAccessChannelId) {
+      await applyBetaChannelOverwrites(
+        rest,
+        ids.betaAccessChannelId,
+        guildId,
+        botUserId,
+        staffRoleIds,
+      )
     }
   } else {
     console.warn(
