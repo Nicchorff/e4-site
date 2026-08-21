@@ -25,7 +25,7 @@ export const BOT_PERMISSIONS = (
 ).toString()
 
 const ROLE_SPECS = [
-  { key: 'adminRoleId', name: 'Admin', color: 0xf2b705, hoist: true },
+  { key: 'adminRoleId', name: 'CEO', color: 0xf2b705, hoist: true },
   { key: 'staffRoleId', name: 'Staff', color: 0x5865f2, hoist: true },
   { key: 'interviewRoleId', name: 'Entrevista', color: 0xe67e22, hoist: true },
   { key: 'approvedRoleId', name: 'Aprovado', color: 0x3ba55d, hoist: true },

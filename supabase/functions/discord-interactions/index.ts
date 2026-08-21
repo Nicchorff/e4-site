@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import nacl from "https://esm.sh/tweetnacl@1.0.3";
-import { loadDiscordRuntimeConfig } from "../_shared/discord-config.ts";
+import { loadDiscordRuntimeConfig, withCeoAdminRole } from "../_shared/discord-config.ts";
 
 function hexToUint8Array(hex: string) {
   if (hex.length % 2 !== 0) throw new Error("Invalid hex");
@@ -542,7 +542,10 @@ Deno.serve(async (req) => {
   }
 
   const admin = createClient(supabaseUrl, serviceKey);
-  const cfg = await loadDiscordRuntimeConfig(admin);
+  const cfg = await withCeoAdminRole(
+    await loadDiscordRuntimeConfig(admin),
+    botToken,
+  );
   const guildIdEnv = cfg.guildId;
   const categoryInProgress = cfg.categoryInProgressId;
   const categoryFinished = cfg.categoryFinishedId;

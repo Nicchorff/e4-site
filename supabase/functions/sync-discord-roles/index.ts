@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { loadDiscordRuntimeConfig } from "../_shared/discord-config.ts";
+import { loadDiscordRuntimeConfig, withCeoAdminRole } from "../_shared/discord-config.ts";
 
 type AppRole = "member" | "staff" | "admin";
 
@@ -94,7 +94,10 @@ Deno.serve(async (req) => {
     }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
-    const cfg = await loadDiscordRuntimeConfig(adminClient);
+    const cfg = await withCeoAdminRole(
+      await loadDiscordRuntimeConfig(adminClient),
+      botToken,
+    );
     const guildId = cfg.guildId;
 
     if (!guildId) {

@@ -19,6 +19,33 @@ function pick(envKey: string, dbVal?: string | null) {
   return (Deno.env.get(envKey) || dbVal || "").trim();
 }
 
+export async function resolveNamedRoleId(
+  botToken: string,
+  guildId: string,
+  names: string[],
+): Promise<string> {
+  if (!botToken || !guildId || names.length === 0) return "";
+  const res = await fetch(
+    `https://discord.com/api/v10/guilds/${guildId}/roles`,
+    { headers: { Authorization: `Bot ${botToken}` } },
+  );
+  if (!res.ok) return "";
+  const roles = (await res.json()) as { id: string; name: string }[];
+  const wanted = new Set(names.map((n) => n.toLowerCase()));
+  const hit = roles.find((r) => wanted.has(String(r.name).toLowerCase()));
+  return hit?.id ?? "";
+}
+
+/** Site admin panel = Discord role CEO (not the leftover "Admin" the bot created). */
+export async function withCeoAdminRole(
+  cfg: DiscordRuntimeConfig,
+  botToken: string,
+): Promise<DiscordRuntimeConfig> {
+  const ceoId = await resolveNamedRoleId(botToken, cfg.guildId, ["CEO"]);
+  if (!ceoId) return cfg;
+  return { ...cfg, adminRoleId: ceoId };
+}
+
 export async function loadDiscordRuntimeConfig(
   admin: SupabaseClient,
 ): Promise<DiscordRuntimeConfig> {

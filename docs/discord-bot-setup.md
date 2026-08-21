@@ -42,7 +42,7 @@ sequenceDiagram
 
 Mapeamento no código:
 
-- Tem cargo **Admin** → `admin`
+- Tem cargo **CEO** → `admin`
 - Senão, tem cargo **Staff** → `staff`
 - Nenhum dos dois → `member`
 
@@ -151,7 +151,7 @@ No Discord (app desktop ou web):
 | Secret | Como obter |
 |---|---|
 | `DISCORD_GUILD_ID` | Clique direito no **ícone do servidor** → **Copiar ID do servidor** |
-| `DISCORD_ADMIN_ROLE_ID` | **Configurações do servidor** → **Cargos** → clique direito no cargo Admin → **Copiar ID** |
+| `DISCORD_ADMIN_ROLE_ID` | **Configurações do servidor** → **Cargos** → clique direito no cargo **CEO** → **Copiar ID** |
 | `DISCORD_STAFF_ROLE_ID` | Idem para o cargo Staff |
 
 Use os cargos reais da hierarquia E4 (ex.: `@Admin`, `@Staff`). Os nomes não importam — só os **IDs**.
@@ -166,7 +166,7 @@ No Supabase Dashboard → **Edge Functions** → **Secrets** (ou Project Setting
 |---|---|
 | `DISCORD_BOT_TOKEN` | Token do passo 2 |
 | `DISCORD_GUILD_ID` | ID do servidor |
-| `DISCORD_ADMIN_ROLE_ID` | ID do cargo admin |
+| `DISCORD_ADMIN_ROLE_ID` | ID do cargo CEO (admin do site) |
 | `DISCORD_STAFF_ROLE_ID` | ID do cargo staff |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY` já são injetados no runtime das functions — não precisa repetir para o sync funcionar.
@@ -197,7 +197,7 @@ Não coloque bot token nem Client Secret aqui.
 - [ ] Quatro secrets da Edge Function preenchidos
 - [ ] `pnpm dev` → **Entrar** / **Entrar com Discord**
 - [ ] Após login, `/perfil` mostra username, avatar e Discord ID
-- [ ] Conta com cargo Admin → badge **ADMIN** no header/perfil e acesso a `/admin`
+- [ ] Conta com cargo **CEO** → badge **ADMIN** no header/perfil e acesso a `/admin`
 - [ ] Conta só Staff → badge **STAFF**, sem acesso a `/admin`
 - [ ] Conta sem esses cargos → **MEMBRO**
 - [ ] Botão **Atualizar cargos** no perfil refresca o `role` após mudar cargo no Discord

@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { loadDiscordRuntimeConfig } from "../_shared/discord-config.ts";
+import { loadDiscordRuntimeConfig, withCeoAdminRole } from "../_shared/discord-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -164,7 +164,10 @@ Deno.serve(async (req) => {
     }
 
     const admin = createClient(supabaseUrl, serviceKey);
-    const cfg = await loadDiscordRuntimeConfig(admin);
+    const cfg = await withCeoAdminRole(
+      await loadDiscordRuntimeConfig(admin),
+      botToken,
+    );
     const guildId = cfg.guildId;
     const categoryOpenId = cfg.categoryOpenId;
     const categoryInProgressId = cfg.categoryInProgressId;
