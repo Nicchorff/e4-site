@@ -1,26 +1,20 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { loadDiscordRuntimeConfig, withCeoAdminRole } from "../_shared/discord-config.ts";
+import {
+  discordApi,
+  postChannelMessageWithRetry,
+  privateTicketOverwrites,
+  sanitizeChannelPart,
+  syncTicketCategoryVisibility,
+  uniqueIds,
+} from "../_shared/discord-tickets.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
-
-const VIEW_CHANNEL = 1 << 10;
-const SEND_MESSAGES = 1 << 11;
-const EMBED_LINKS = 1 << 14;
-const ATTACH_FILES = 1 << 15;
-const READ_MESSAGE_HISTORY = 1 << 16;
-const STAFF_ALLOW =
-  VIEW_CHANNEL |
-  SEND_MESSAGES |
-  READ_MESSAGE_HISTORY |
-  EMBED_LINKS |
-  ATTACH_FILES;
-const BUYER_ALLOW =
-  VIEW_CHANNEL | SEND_MESSAGES | READ_MESSAGE_HISTORY | ATTACH_FILES;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -34,97 +28,6 @@ function formatBrl(cents: number) {
     style: "currency",
     currency: "BRL",
   });
-}
-
-function sanitizeChannelPart(raw: string) {
-  return raw
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 24) || "user";
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function discordApi(
-  token: string,
-  method: string,
-  path: string,
-  body?: unknown,
-) {
-  const res = await fetch(`https://discord.com/api/v10${path}`, {
-    method,
-    headers: {
-      Authorization: `Bot ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await res.text();
-  let data: unknown = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = text;
-  }
-  if (!res.ok) {
-    const msg =
-      typeof data === "object" && data && "message" in data
-        ? String((data as { message: string }).message)
-        : text || res.statusText;
-    throw new Error(`Discord ${method} ${path}: ${msg}`);
-  }
-  return data as Record<string, unknown>;
-}
-
-/** Staff + bot always see the 3 categories; @everyone never does. */
-async function syncTicketCategoryVisibility(
-  token: string,
-  guildId: string,
-  categoryIds: string[],
-  staffRoleIds: string[],
-  botUserId: string,
-) {
-  for (const categoryId of categoryIds) {
-    if (!categoryId) continue;
-    await discordApi(
-      token,
-      "PUT",
-      `/channels/${categoryId}/permissions/${guildId}`,
-      { type: 0, allow: "0", deny: String(VIEW_CHANNEL) },
-    );
-    for (const roleId of staffRoleIds) {
-      await discordApi(
-        token,
-        "PUT",
-        `/channels/${categoryId}/permissions/${roleId}`,
-        { type: 0, allow: String(VIEW_CHANNEL), deny: "0" },
-      );
-    }
-    await discordApi(
-      token,
-      "PUT",
-      `/channels/${categoryId}/permissions/${botUserId}`,
-      { type: 1, allow: String(VIEW_CHANNEL), deny: "0" },
-    );
-  }
-}
-
-function uniqueIds(...lists: (string | undefined | null)[][]) {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const list of lists) {
-    for (const id of list) {
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      out.push(id);
-    }
-  }
-  return out;
 }
 
 Deno.serve(async (req) => {
@@ -292,40 +195,12 @@ Deno.serve(async (req) => {
     const channelName = `doacao-${sanitizeChannelPart(profile.username)}-${shortId}`
       .slice(0, 100);
 
-    const permission_overwrites: {
-      id: string;
-      type: 0 | 1;
-      allow: string;
-      deny: string;
-    }[] = [
-      {
-        id: guildId,
-        type: 0,
-        allow: "0",
-        deny: String(VIEW_CHANNEL),
-      },
-      {
-        id: botUserId,
-        type: 1,
-        allow: String(STAFF_ALLOW),
-        deny: "0",
-      },
-      {
-        id: profile.discord_id,
-        type: 1,
-        allow: String(BUYER_ALLOW),
-        deny: "0",
-      },
-    ];
-
-    for (const roleId of staffRoleIds) {
-      permission_overwrites.push({
-        id: roleId,
-        type: 0,
-        allow: String(STAFF_ALLOW),
-        deny: "0",
-      });
-    }
+    const permission_overwrites = privateTicketOverwrites({
+      guildId,
+      botUserId,
+      memberDiscordId: profile.discord_id,
+      staffRoleIds,
+    });
 
     let channel: Record<string, unknown>;
     try {
@@ -392,25 +267,12 @@ Deno.serve(async (req) => {
       components,
     };
 
-    let messageId: string | null = null;
-    let lastMessageError: unknown = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        if (attempt > 0) await sleep(500);
-        const message = await discordApi(
-          botToken,
-          "POST",
-          `/channels/${channelId}/messages`,
-          messagePayload,
-        );
-        messageId = String(message.id);
-        lastMessageError = null;
-        break;
-      } catch (err) {
-        lastMessageError = err;
-        console.error(`Failed to post ticket message (attempt ${attempt + 1})`, err);
-      }
-    }
+    const posted = await postChannelMessageWithRetry(
+      botToken,
+      channelId,
+      messagePayload,
+    );
+    const messageId = posted.ok ? posted.messageId : null;
 
     if (!messageId) {
       try {
@@ -420,8 +282,8 @@ Deno.serve(async (req) => {
       }
       await admin.from("orders").delete().eq("id", order.id);
       const detail =
-        lastMessageError instanceof Error
-          ? lastMessageError.message
+        !posted.ok && posted.error instanceof Error
+          ? posted.error.message
           : "Falha ao enviar mensagem do ticket";
       return json(
         {

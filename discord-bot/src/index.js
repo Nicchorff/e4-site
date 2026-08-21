@@ -25,6 +25,7 @@ const supabaseUrl = process.env.SUPABASE_URL
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 let formChannelId = process.env.DISCORD_WL_FORM_CHANNEL_ID || ''
 let betaAccessChannelId = process.env.DISCORD_BETA_ACCESS_CHANNEL_ID || ''
+let ticketPanelChannelId = process.env.DISCORD_TICKET_PANEL_CHANNEL_ID || ''
 
 if (!token || !supabaseUrl || !serviceKey) {
   console.error(
@@ -208,6 +209,99 @@ function buildBetaEmbed() {
   )
 
   return { embeds: [embed], components: [row] }
+}
+
+function buildTicketPanelEmbed() {
+  const embed = new EmbedBuilder()
+    .setTitle('Tickets Elite Four')
+    .setDescription(
+      '**Dúvida, suporte ou reporte**\n\n' +
+        'Escolha o tipo e descreva o assunto. Um canal privado é criado nas categorias Ticket.\n' +
+        'A staff assume o ticket e encerra quando o atendimento terminar.\n\n' +
+        'Só um ticket aberto por vez.',
+    )
+    .setColor(0xf2b705)
+    .setFooter({ text: 'Elite Four · tickets' })
+    .setTimestamp()
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('ticket_start:duvida')
+      .setLabel('Dúvida')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('❓'),
+    new ButtonBuilder()
+      .setCustomId('ticket_start:suporte')
+      .setLabel('Suporte')
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('🔧'),
+    new ButtonBuilder()
+      .setCustomId('ticket_start:reporte')
+      .setLabel('Reporte')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('🚨'),
+  )
+
+  return { embeds: [embed], components: [row] }
+}
+
+async function loadTicketPanelEmbedMessageId() {
+  const { data } = await supabase
+    .from('discord_runtime_config')
+    .select('ticket_panel_embed_message_id')
+    .eq('id', 1)
+    .maybeSingle()
+  return data?.ticket_panel_embed_message_id || null
+}
+
+async function ensureTicketPanelEmbed() {
+  if (!ticketPanelChannelId) return
+  try {
+    const channel = await client.channels.fetch(ticketPanelChannelId).catch((err) => {
+      console.error(
+        'Cannot fetch ticket panel channel',
+        ticketPanelChannelId,
+        err?.message ?? err,
+      )
+      return null
+    })
+    if (!channel || !channel.isTextBased()) {
+      console.error(
+        'Ticket panel channel missing or inaccessible',
+        ticketPanelChannelId,
+      )
+      return
+    }
+
+    const payload = buildTicketPanelEmbed()
+    const existingId = await loadTicketPanelEmbedMessageId()
+    if (existingId) {
+      try {
+        const existing = await channel.messages.fetch(existingId)
+        await existing.edit(payload)
+        console.log('Updated ticket panel embed', existingId)
+        return
+      } catch {
+        console.warn('Stored ticket panel embed missing; posting a new one')
+      }
+    }
+
+    const msg = await channel.send(payload)
+    await supabase
+      .from('discord_runtime_config')
+      .update({
+        ticket_panel_embed_message_id: msg.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', 1)
+    console.log('Posted ticket panel embed', msg.id)
+  } catch (err) {
+    console.error(
+      'ensureTicketPanelEmbed failed',
+      ticketPanelChannelId,
+      err?.message ?? err,
+    )
+  }
 }
 
 async function loadBetaEmbedMessageId() {
@@ -441,6 +535,7 @@ client.once(Events.ClientReady, async (c) => {
       })
       formChannelId = ids.formChannelId || formChannelId
       betaAccessChannelId = ids.betaAccessChannelId || betaAccessChannelId
+      ticketPanelChannelId = ids.ticketPanelChannelId || ticketPanelChannelId
       if (ids.formChannelId) {
         process.env.DISCORD_WL_FORM_CHANNEL_ID = ids.formChannelId
       }
@@ -449,6 +544,9 @@ client.once(Events.ClientReady, async (c) => {
       }
       if (ids.betaAccessChannelId) {
         process.env.DISCORD_BETA_ACCESS_CHANNEL_ID = ids.betaAccessChannelId
+      }
+      if (ids.ticketPanelChannelId) {
+        process.env.DISCORD_TICKET_PANEL_CHANNEL_ID = ids.ticketPanelChannelId
       }
       process.env.DISCORD_GUILD_ID = guildId
       printEnvBlock(ids)
@@ -471,6 +569,13 @@ client.once(Events.ClientReady, async (c) => {
   } else {
     console.warn(
       'No beta access channel. Set DISCORD_BETA_ACCESS_CATEGORY_ID or run !e4-setup.',
+    )
+  }
+  if (ticketPanelChannelId) {
+    await ensureTicketPanelEmbed()
+  } else {
+    console.warn(
+      'No ticket panel channel. Restart the bot or run !e4-setup.',
     )
   }
 })
@@ -509,6 +614,7 @@ client.on(Events.MessageCreate, async (message) => {
       })
       formChannelId = ids.formChannelId
       betaAccessChannelId = ids.betaAccessChannelId || betaAccessChannelId
+      ticketPanelChannelId = ids.ticketPanelChannelId || ticketPanelChannelId
       printEnvBlock(ids)
       await persistRuntimeConfig(supabase, ids)
       await registerSlashCommand(client.rest, client.user.id, guildId)
@@ -520,8 +626,12 @@ client.on(Events.MessageCreate, async (message) => {
         betaAccessChannelId = ids.betaAccessChannelId
         await ensureBetaEmbed()
       }
+      if (ids.ticketPanelChannelId) {
+        ticketPanelChannelId = ids.ticketPanelChannelId
+        await ensureTicketPanelEmbed()
+      }
       await message.channel.send(
-        `Setup ok. Form: ${ids.formChannelId ? `<#${ids.formChannelId}>` : 'n/a'} · Beta: ${ids.betaAccessChannelId ? `<#${ids.betaAccessChannelId}>` : 'n/a'} · invite: ${ids.inviteUrl || 'n/a'}`,
+        `Setup ok. Form: ${ids.formChannelId ? `<#${ids.formChannelId}>` : 'n/a'} · Tickets: ${ids.ticketPanelChannelId ? `<#${ids.ticketPanelChannelId}>` : 'n/a'} · Beta: ${ids.betaAccessChannelId ? `<#${ids.betaAccessChannelId}>` : 'n/a'} · invite: ${ids.inviteUrl || 'n/a'}`,
       )
     } catch (err) {
       await message.channel.send(`Setup falhou: ${err?.message ?? err}`)

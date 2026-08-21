@@ -74,6 +74,11 @@ const AdminConvitesPage = lazy(() =>
     default: m.AdminConvitesPage,
   })),
 )
+const AdminTicketsPage = lazy(() =>
+  import('@/pages/AdminTicketsPage').then((m) => ({
+    default: m.AdminTicketsPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -190,6 +195,14 @@ export default function App() {
                     element={
                       <RequireAdmin>
                         <AdminConvitesPage />
+                      </RequireAdmin>
+                    }
+                  />
+                  <Route
+                    path="admin/tickets"
+                    element={
+                      <RequireAdmin>
+                        <AdminTicketsPage />
                       </RequireAdmin>
                     }
                   />

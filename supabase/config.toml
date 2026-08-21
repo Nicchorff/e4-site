@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.whitelist-moderate]
 verify_jwt = true
+
+[functions.support-ticket-moderate]
+verify_jwt = true

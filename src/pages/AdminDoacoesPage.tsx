@@ -63,9 +63,10 @@ export function AdminDoacoesPage() {
             Doações · tickets Discord
           </h1>
           <p className="mt-2 text-sm text-e4-silver">
-            Cargos que sempre veem as 3 categorias Ticket e todos os canais.
-            Doadores só veem o próprio ticket enquanto estiver aberto. Setup:{" "}
-            <code className="text-e4-gold">docs/discord-donation-tickets.md</code>
+            Cargos que sempre veem as 3 categorias Ticket e todos os canais
+            (doação, dúvida, suporte e reporte). Quem abre o ticket só vê o
+            próprio canal enquanto estiver aberto. Setup:{' '}
+            <code className="text-e4-gold">docs/discord-tickets.md</code>
             .
           </p>
         </div>
@@ -103,8 +104,8 @@ export function AdminDoacoesPage() {
             <span className="block text-xs text-e4-silver">
               Um ID por linha. Esses cargos + Admin/Staff dos secrets sempre
               veem Ticket | Aberto / Em andamento / Finalizado e todos os
-              tickets. Membros comuns não veem a categoria sem um ticket
-              próprio aberto.
+              tickets (doação e suporte). Membros comuns não veem a categoria
+              sem um ticket próprio aberto.
             </span>
           </label>
           <Button

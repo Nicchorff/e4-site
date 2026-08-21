@@ -15,6 +15,7 @@ export type DiscordRuntimeConfig = {
   approvedRoleId: string;
   betaAccessCategoryId: string;
   betaAccessChannelId: string;
+  ticketPanelChannelId: string;
 };
 
 export const DEFAULT_BETA_ACCESS_CATEGORY_ID = "1534358251867607071";
@@ -99,6 +100,10 @@ export async function loadDiscordRuntimeConfig(
     betaAccessChannelId: pick(
       "DISCORD_BETA_ACCESS_CHANNEL_ID",
       data?.beta_access_channel_id,
+    ),
+    ticketPanelChannelId: pick(
+      "DISCORD_TICKET_PANEL_CHANNEL_ID",
+      data?.ticket_panel_channel_id,
     ),
   };
 }

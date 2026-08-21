@@ -17,7 +17,8 @@ Não hardcode IDs do servidor antigo. No guild **novo**, o bot cria (ou reusa pe
 | `#whitelist-formulario` | Embed + botão |
 | `#whitelist-threads` | Threads privadas do formulário |
 | `#resultado-formulario` / `#resultado-entrevista` | Resultados |
-| Categorias `Ticket \| Aberto` / `Em andamento` / `Finalizado` | Loja |
+| `#tickets` | Painel Dúvida / Suporte / Reporte |
+| Categorias `Ticket \| Aberto` / `Em andamento` / `Finalizado` | Loja + suporte |
 
 IDs vão para `public.discord_runtime_config` (o bot grava no start / `npm run setup-guild` / `!e4-setup`). Secrets `DISCORD_*` no Supabase **sobrescrevem** a tabela se estiverem preenchidos.
 

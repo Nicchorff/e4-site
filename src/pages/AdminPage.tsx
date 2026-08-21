@@ -21,6 +21,11 @@ const sections = [
     blurb: 'Cargos que veem tickets no Discord',
   },
   {
+    to: '/admin/tickets',
+    title: 'Tickets',
+    blurb: 'Dúvida, suporte, reporte e doações',
+  },
+  {
     to: '/admin/depoimentos',
     title: 'Depoimentos',
     blurb: 'Curadoria do carrossel',

@@ -3,6 +3,18 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import nacl from "https://esm.sh/tweetnacl@1.0.3";
 import { loadDiscordRuntimeConfig, withCeoAdminRole } from "../_shared/discord-config.ts";
 import { panelConfigured, panelLiberateWhitelist } from "../_shared/e4-panel.ts";
+import {
+  finishPrivateTicketChannel,
+  isSupportTicketKind,
+  moveTicketChannel,
+  postChannelMessageWithRetry,
+  privateTicketOverwrites,
+  sanitizeChannelPart,
+  SUPPORT_KIND_LABEL,
+  syncTicketCategoryVisibility,
+  uniqueIds,
+  type SupportTicketKind,
+} from "../_shared/discord-tickets.ts";
 
 function hexToUint8Array(hex: string) {
   if (hex.length % 2 !== 0) throw new Error("Invalid hex");
@@ -126,6 +138,304 @@ function memberMayModerate(
   if (adminRoleId && roles.includes(adminRoleId)) return true;
   if (staffRoleId && roles.includes(staffRoleId)) return true;
   return viewerRoleIds.some((id) => roles.includes(id));
+}
+
+type SupportTicketRow = {
+  id: string;
+  kind: SupportTicketKind;
+  status: string;
+  discord_user_id: string;
+  discord_username: string;
+  discord_channel_id: string;
+  claimed_by_discord_id: string | null;
+  claimed_at: string | null;
+};
+
+async function startSupportTicket(opts: {
+  admin: ReturnType<typeof createClient>;
+  botToken: string;
+  guildId: string;
+  categoryOpenId: string;
+  categoryInProgressId: string;
+  categoryFinishedId: string;
+  adminRoleId: string;
+  staffRoleId: string;
+  viewerRoleIds: string[];
+  member: InteractionMember | undefined;
+  kind: SupportTicketKind;
+  subject: string;
+  body: string;
+}): Promise<{ ok: true; channelId: string } | { ok: false; error: string }> {
+  const user = opts.member?.user;
+  if (!user?.id) {
+    return { ok: false, error: "Não foi possível identificar seu Discord." };
+  }
+  if (!opts.guildId || !opts.categoryOpenId) {
+    return { ok: false, error: "Configuração incompleta (categoria Ticket | Aberto)." };
+  }
+
+  const subject = opts.subject.trim();
+  const body = opts.body.trim();
+  if (subject.length < 3) {
+    return { ok: false, error: "Informe um assunto com pelo menos 3 caracteres." };
+  }
+
+  const { data: active } = await opts.admin
+    .from("support_tickets")
+    .select("id, discord_channel_id")
+    .eq("discord_user_id", user.id)
+    .in("status", ["open", "in_progress"])
+    .maybeSingle();
+
+  if (active?.discord_channel_id) {
+    return {
+      ok: false,
+      error: `Você já tem um ticket aberto em <#${active.discord_channel_id}>. Aguarde o encerramento.`,
+    };
+  }
+
+  const { data: profile } = await opts.admin
+    .from("profiles")
+    .select("id")
+    .eq("discord_id", user.id)
+    .maybeSingle();
+
+  const displayName =
+    opts.member?.nick || user.global_name || user.username || user.id;
+  const ticketId = crypto.randomUUID();
+  const shortId = ticketId.replace(/-/g, "").slice(0, 8);
+  const channelName =
+    `${opts.kind}-${sanitizeChannelPart(displayName)}-${shortId}`.slice(0, 100);
+  const kindLabel = SUPPORT_KIND_LABEL[opts.kind];
+
+  const botMe = await discordApi(opts.botToken, "GET", "/users/@me");
+  const botUserId = String(botMe.id);
+  const staffRoleIds = uniqueIds(opts.viewerRoleIds, [
+    opts.adminRoleId,
+    opts.staffRoleId,
+  ]);
+
+  try {
+    await syncTicketCategoryVisibility(
+      opts.botToken,
+      opts.guildId,
+      [opts.categoryOpenId, opts.categoryInProgressId, opts.categoryFinishedId],
+      staffRoleIds,
+      botUserId,
+    );
+  } catch (err) {
+    console.error("category visibility sync failed", err);
+  }
+
+  let channel: Record<string, unknown>;
+  try {
+    channel = await discordApi(
+      opts.botToken,
+      "POST",
+      `/guilds/${opts.guildId}/channels`,
+      {
+        name: channelName,
+        type: 0,
+        parent_id: opts.categoryOpenId,
+        topic: `${kindLabel} E4 · ${subject}`.slice(0, 1024),
+        permission_overwrites: privateTicketOverwrites({
+          guildId: opts.guildId,
+          botUserId,
+          memberDiscordId: user.id,
+          staffRoleIds,
+        }),
+      },
+    );
+  } catch (err) {
+    console.error("create support ticket channel", err);
+    return {
+      ok: false,
+      error: `Falha ao criar canal: ${
+        err instanceof Error ? err.message : "erro"
+      }`,
+    };
+  }
+
+  const channelId = String(channel.id);
+  const embed = {
+    title: `Novo ticket · ${kindLabel}`,
+    color: 0xf2b705,
+    description: "Em alguns instantes alguém vai te atender neste canal.",
+    fields: [
+      {
+        name: "Aberto por",
+        value: `<@${user.id}> (\`${displayName}\`)`,
+        inline: false,
+      },
+      { name: "Assunto", value: subject.slice(0, 1024), inline: false },
+      {
+        name: "Descrição",
+        value: (body || "—").slice(0, 1024),
+        inline: false,
+      },
+    ],
+    footer: { text: "Elite Four · ticket" },
+    timestamp: new Date().toISOString(),
+  };
+
+  const posted = await postChannelMessageWithRetry(opts.botToken, channelId, {
+    content: `<@${user.id}>`,
+    embeds: [embed],
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 2,
+            style: 1,
+            label: "Assumir",
+            custom_id: `ticket_claim:${ticketId}`,
+          },
+          {
+            type: 2,
+            style: 4,
+            label: "Encerrar",
+            custom_id: `ticket_close:${ticketId}`,
+          },
+        ],
+      },
+    ],
+  });
+
+  if (!posted.ok) {
+    try {
+      await discordApi(opts.botToken, "DELETE", `/channels/${channelId}`);
+    } catch (cleanupErr) {
+      console.error("Failed to delete orphan support channel", cleanupErr);
+    }
+    return {
+      ok: false,
+      error: "Canal criado, mas o bot não conseguiu enviar a mensagem inicial.",
+    };
+  }
+
+  const { error: insertErr } = await opts.admin.from("support_tickets").insert({
+    id: ticketId,
+    kind: opts.kind,
+    status: "open",
+    discord_user_id: user.id,
+    discord_username: displayName,
+    user_id: profile?.id ?? null,
+    subject,
+    body,
+    discord_channel_id: channelId,
+    discord_message_id: posted.messageId,
+  });
+
+  if (insertErr) {
+    console.error("support_tickets insert failed", insertErr);
+    try {
+      await discordApi(opts.botToken, "DELETE", `/channels/${channelId}`);
+    } catch (cleanupErr) {
+      console.error("Failed to delete support channel after insert error", cleanupErr);
+    }
+    if (insertErr.code === "23505") {
+      return {
+        ok: false,
+        error: "Você já tem um ticket aberto. Aguarde o encerramento.",
+      };
+    }
+    return { ok: false, error: insertErr.message };
+  }
+
+  return { ok: true, channelId };
+}
+
+async function claimSupportTicket(opts: {
+  admin: ReturnType<typeof createClient>;
+  botToken: string;
+  channelId: string;
+  categoryInProgress: string;
+  actorId: string | undefined;
+  ticketId: string;
+}): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
+  const { data: ticket } = await opts.admin
+    .from("support_tickets")
+    .select("*")
+    .eq("id", opts.ticketId)
+    .maybeSingle();
+
+  if (!ticket) return { ok: false, error: "Ticket não encontrado no banco." };
+  if (ticket.status === "finished") {
+    return { ok: false, error: "Este ticket já foi finalizado." };
+  }
+  if (ticket.status === "in_progress" && ticket.claimed_by_discord_id) {
+    return {
+      ok: false,
+      error: `Já assumido por <@${ticket.claimed_by_discord_id}>.`,
+    };
+  }
+
+  try {
+    await moveTicketChannel(
+      opts.botToken,
+      opts.channelId,
+      opts.categoryInProgress,
+    );
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Falha ao mover canal: ${
+        err instanceof Error ? err.message : "erro"
+      }`,
+    };
+  }
+
+  await opts.admin
+    .from("support_tickets")
+    .update({
+      status: "in_progress",
+      claimed_by_discord_id: opts.actorId ?? null,
+      claimed_at: new Date().toISOString(),
+    })
+    .eq("id", ticket.id);
+
+  return {
+    ok: true,
+    content: `<@${opts.actorId}> assumiu este ticket. Canal movido para **Ticket | Em andamento**.`,
+  };
+}
+
+async function closeSupportTicket(opts: {
+  admin: ReturnType<typeof createClient>;
+  botToken: string;
+  categoryFinished?: string;
+  actorId: string | undefined;
+  ticket: SupportTicketRow;
+}): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
+  if (opts.ticket.status === "finished") {
+    return { ok: false, error: "Ticket já finalizado." };
+  }
+
+  await finishPrivateTicketChannel({
+    token: opts.botToken,
+    channelId: opts.ticket.discord_channel_id,
+    categoryFinishedId: opts.categoryFinished,
+    openerDiscordId: opts.ticket.discord_user_id,
+  });
+
+  const now = new Date().toISOString();
+  await opts.admin
+    .from("support_tickets")
+    .update({
+      status: "finished",
+      finished_at: now,
+      finished_by_discord_id: opts.actorId ?? null,
+      claimed_by_discord_id:
+        opts.ticket.claimed_by_discord_id ?? opts.actorId ?? null,
+      claimed_at: opts.ticket.claimed_at ?? now,
+    })
+    .eq("id", opts.ticket.id);
+
+  return {
+    ok: true,
+    content: `<@${opts.actorId}> encerrou este ticket. Canal movido para **Ticket | Finalizado**.`,
+  };
 }
 
 async function markTicketPaid(
@@ -693,6 +1003,7 @@ Deno.serve(async (req) => {
     botToken,
   );
   const guildIdEnv = cfg.guildId;
+  const categoryOpenId = cfg.categoryOpenId;
   const categoryInProgress = cfg.categoryInProgressId;
   const categoryFinished = cfg.categoryFinishedId;
   const adminRoleId = cfg.adminRoleId;
@@ -790,6 +1101,61 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (customId.startsWith("ticket_modal:")) {
+      const kindRaw = customId.slice("ticket_modal:".length);
+      if (!isSupportTicketKind(kindRaw)) {
+        return interactionJson({
+          type: 4,
+          data: { content: "Tipo de ticket inválido.", flags: 64 },
+        });
+      }
+
+      const rows = interaction.data?.components ?? [];
+      let subject = "";
+      let description = "";
+      for (const row of rows) {
+        for (const comp of row.components ?? []) {
+          if (comp.custom_id === "ticket_subject") {
+            subject = (comp.value ?? "").trim();
+          }
+          if (comp.custom_id === "ticket_body") {
+            description = (comp.value ?? "").trim();
+          }
+        }
+      }
+
+      const result = await startSupportTicket({
+        admin,
+        botToken,
+        guildId: interaction.guild_id ?? guildIdEnv ?? "",
+        categoryOpenId,
+        categoryInProgressId: categoryInProgress,
+        categoryFinishedId: categoryFinished,
+        adminRoleId,
+        staffRoleId,
+        viewerRoleIds,
+        member: interaction.member,
+        kind: kindRaw,
+        subject,
+        body: description,
+      });
+
+      if (!result.ok) {
+        return interactionJson({
+          type: 4,
+          data: { content: result.error, flags: 64 },
+        });
+      }
+
+      return interactionJson({
+        type: 4,
+        data: {
+          content: `Ticket aberto em <#${result.channelId}>. A staff vai te atender por lá.`,
+          flags: 64,
+        },
+      });
+    }
+
     return interactionJson({
       type: 4,
       data: { content: "Modal não reconhecido.", flags: 64 },
@@ -882,6 +1248,56 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (interaction.type === 3 && customId.startsWith("ticket_start:")) {
+      const kindRaw = customId.slice("ticket_start:".length);
+      if (!isSupportTicketKind(kindRaw)) {
+        return interactionJson({
+          type: 4,
+          data: { content: "Tipo de ticket inválido.", flags: 64 },
+        });
+      }
+      const kindLabel = SUPPORT_KIND_LABEL[kindRaw];
+      return interactionJson({
+        type: 9,
+        data: {
+          custom_id: `ticket_modal:${kindRaw}`,
+          title: `Abrir ticket · ${kindLabel}`.slice(0, 45),
+          components: [
+            {
+              type: 1,
+              components: [
+                {
+                  type: 4,
+                  custom_id: "ticket_subject",
+                  label: "Assunto",
+                  style: 1,
+                  min_length: 3,
+                  max_length: 100,
+                  placeholder: "Resumo do que você precisa",
+                  required: true,
+                },
+              ],
+            },
+            {
+              type: 1,
+              components: [
+                {
+                  type: 4,
+                  custom_id: "ticket_body",
+                  label: "Descrição",
+                  style: 2,
+                  min_length: 10,
+                  max_length: 1000,
+                  placeholder: "Detalhe o problema, dúvida ou reporte.",
+                  required: true,
+                },
+              ],
+            },
+          ],
+        },
+      });
+    }
+
     if (
       interaction.type === 3 &&
       customId.startsWith("donation_claim:")
@@ -965,6 +1381,90 @@ Deno.serve(async (req) => {
         data: {
           content: `<@${actorId}> assumiu este ticket. Canal movido para **Ticket | Em andamento**.`,
         },
+      });
+    }
+
+      });
+    }
+
+    if (interaction.type === 3 && customId.startsWith("ticket_claim:")) {
+      const ticketId = customId.slice("ticket_claim:".length);
+      if (!memberMayModerate(member, viewerRoleIds, adminRoleId, staffRoleId)) {
+        return interactionJson({
+          type: 4,
+          data: {
+            content: "Você não tem permissão para assumir este ticket.",
+            flags: 64,
+          },
+        });
+      }
+      if (!channelId || !categoryInProgress) {
+        return interactionJson({
+          type: 4,
+          data: {
+            content: "Configuração incompleta (categoria Ticket | Em andamento).",
+            flags: 64,
+          },
+        });
+      }
+      const result = await claimSupportTicket({
+        admin,
+        botToken,
+        channelId,
+        categoryInProgress,
+        actorId,
+        ticketId,
+      });
+      if (!result.ok) {
+        return interactionJson({
+          type: 4,
+          data: { content: result.error, flags: 64 },
+        });
+      }
+      return interactionJson({
+        type: 4,
+        data: { content: result.content },
+      });
+    }
+
+    if (interaction.type === 3 && customId.startsWith("ticket_close:")) {
+      const ticketId = customId.slice("ticket_close:".length);
+      if (!memberMayModerate(member, viewerRoleIds, adminRoleId, staffRoleId)) {
+        return interactionJson({
+          type: 4,
+          data: {
+            content: "Você não tem permissão para encerrar este ticket.",
+            flags: 64,
+          },
+        });
+      }
+      const { data: ticket } = await admin
+        .from("support_tickets")
+        .select("*")
+        .eq("id", ticketId)
+        .maybeSingle();
+      if (!ticket) {
+        return interactionJson({
+          type: 4,
+          data: { content: "Ticket não encontrado no banco.", flags: 64 },
+        });
+      }
+      const result = await closeSupportTicket({
+        admin,
+        botToken,
+        categoryFinished,
+        actorId,
+        ticket: ticket as SupportTicketRow,
+      });
+      if (!result.ok) {
+        return interactionJson({
+          type: 4,
+          data: { content: result.error, flags: 64 },
+        });
+      }
+      return interactionJson({
+        type: 4,
+        data: { content: result.content },
       });
     }
 
@@ -1067,6 +1567,73 @@ Deno.serve(async (req) => {
             ? `Pedido \`${ticket.order_id}\` já estava pago. Canal movido para **Ticket | Finalizado** (acesso do doador removido).`
             : `Comprovante aprovado por <@${actorId}>. Pedido \`${ticket.order_id}\` marcado como **pago** e entrega enfileirada. Canal → **Ticket | Finalizado**. O doador deixa de ver o canal.`,
         },
+      });
+    }
+
+    if (interaction.type === 2 && commandName === "encerrar") {
+      if (!memberMayModerate(member, viewerRoleIds, adminRoleId, staffRoleId)) {
+        return interactionJson({
+          type: 4,
+          data: {
+            content: "Você não tem permissão para encerrar tickets.",
+            flags: 64,
+          },
+        });
+      }
+      if (!channelId) {
+        return interactionJson({
+          type: 4,
+          data: { content: "Use este comando no canal do ticket.", flags: 64 },
+        });
+      }
+
+      const { data: donation } = await admin
+        .from("donation_tickets")
+        .select("id")
+        .eq("discord_channel_id", channelId)
+        .maybeSingle();
+      if (donation) {
+        return interactionJson({
+          type: 4,
+          data: {
+            content:
+              "Este é um ticket de **doação**. Use `/comprovante-aprovado` para marcar o pedido como pago.",
+            flags: 64,
+          },
+        });
+      }
+
+      const { data: ticket } = await admin
+        .from("support_tickets")
+        .select("*")
+        .eq("discord_channel_id", channelId)
+        .maybeSingle();
+      if (!ticket) {
+        return interactionJson({
+          type: 4,
+          data: {
+            content: "Este canal não é um ticket de suporte registrado no site.",
+            flags: 64,
+          },
+        });
+      }
+
+      const result = await closeSupportTicket({
+        admin,
+        botToken,
+        categoryFinished,
+        actorId,
+        ticket: ticket as SupportTicketRow,
+      });
+      if (!result.ok) {
+        return interactionJson({
+          type: 4,
+          data: { content: result.error, flags: 64 },
+        });
+      }
+      return interactionJson({
+        type: 4,
+        data: { content: result.content },
       });
     }
 

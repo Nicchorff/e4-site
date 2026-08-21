@@ -47,6 +47,8 @@ const WL_CHANNELS = [
 const DEFAULT_BETA_ACCESS_CATEGORY_ID = '1534358251867607071'
 const BETA_CHANNEL_NAME = '🔴liberar-acesso-beta'
 const BETA_CHANNEL_MATCH = 'liberar-acesso-beta'
+const TICKET_PANEL_CHANNEL_NAME = 'tickets'
+const TICKET_PANEL_CHANNEL_MATCH = 'tickets'
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
@@ -185,6 +187,75 @@ async function applyBetaChannelOverwrites(
   }
 }
 
+function ticketPanelEveryoneOverwrite(guildId) {
+  return {
+    id: guildId,
+    type: 0,
+    allow: (
+      PermissionFlagsBits.ViewChannel |
+      PermissionFlagsBits.ReadMessageHistory
+    ).toString(),
+    deny: PermissionFlagsBits.SendMessages.toString(),
+  }
+}
+
+function ticketPanelBotOverwrite(botUserId) {
+  return {
+    id: botUserId,
+    type: 1,
+    allow: (
+      PermissionFlagsBits.ViewChannel |
+      PermissionFlagsBits.SendMessages |
+      PermissionFlagsBits.EmbedLinks |
+      PermissionFlagsBits.AttachFiles |
+      PermissionFlagsBits.ReadMessageHistory |
+      PermissionFlagsBits.ManageMessages
+    ).toString(),
+    deny: '0',
+  }
+}
+
+function ticketPanelStaffOverwrite(roleId) {
+  return {
+    id: roleId,
+    type: 0,
+    allow: (
+      PermissionFlagsBits.ViewChannel |
+      PermissionFlagsBits.SendMessages |
+      PermissionFlagsBits.ReadMessageHistory |
+      PermissionFlagsBits.ManageMessages
+    ).toString(),
+    deny: '0',
+  }
+}
+
+async function applyTicketPanelOverwrites(
+  rest,
+  channelId,
+  guildId,
+  botUserId,
+  staffRoleIds,
+) {
+  try {
+    await rest.put(`/channels/${channelId}/permissions/${botUserId}`, {
+      body: ticketPanelBotOverwrite(botUserId),
+    })
+    await rest.put(`/channels/${channelId}/permissions/${guildId}`, {
+      body: ticketPanelEveryoneOverwrite(guildId),
+    })
+    for (const roleId of staffRoleIds) {
+      await rest.put(`/channels/${channelId}/permissions/${roleId}`, {
+        body: ticketPanelStaffOverwrite(roleId),
+      })
+    }
+    console.log(`Opened ticket panel ${channelId} for @everyone + bot`)
+  } catch (err) {
+    console.warn(
+      `Could not set ticket panel permissions on ${channelId}: ${discordErr(err)}. Move the E4 bot role to the top of the role list.`,
+    )
+  }
+}
+
 async function tryApplyTicketOverwrites(
   rest,
   categoryId,
@@ -233,6 +304,7 @@ export async function ensureGuildSetup({ rest, guildId, botUserId }) {
     resultInterviewChannelId: '',
     betaAccessCategoryId: '',
     betaAccessChannelId: '',
+    ticketPanelChannelId: '',
     inviteUrl: '',
   }
 
@@ -432,6 +504,49 @@ export async function ensureGuildSetup({ rest, guildId, botUserId }) {
     )
   }
 
+  const existingTicketPanel = channels.find((ch) => {
+    const name = String(ch.name || '').toLowerCase()
+    return ch.type === ChannelType.GuildText && name === TICKET_PANEL_CHANNEL_MATCH
+  })
+  if (existingTicketPanel) {
+    ids.ticketPanelChannelId = existingTicketPanel.id
+    console.log(`Reusing channel #${existingTicketPanel.name} ${existingTicketPanel.id}`)
+  } else {
+    try {
+      const created = /** @type {{ id: string, name: string, type: number }} */ (
+        await rest.post(Routes.guildChannels(guildId), {
+          body: {
+            name: TICKET_PANEL_CHANNEL_NAME,
+            type: ChannelType.GuildText,
+            topic: 'Abra um ticket de dúvida, suporte ou reporte.',
+            permission_overwrites: [
+              ticketPanelEveryoneOverwrite(guildId),
+              ticketPanelBotOverwrite(botUserId),
+              ...staffRoleIds.map(ticketPanelStaffOverwrite),
+            ],
+          },
+        })
+      )
+      ids.ticketPanelChannelId = created.id
+      channels.push(created)
+      console.log(`Created channel #${created.name} ${created.id}`)
+    } catch (err) {
+      console.error(
+        `Failed creating ticket panel channel: ${discordErr(err)}`,
+      )
+    }
+    await sleep(350)
+  }
+  if (ids.ticketPanelChannelId) {
+    await applyTicketPanelOverwrites(
+      rest,
+      ids.ticketPanelChannelId,
+      guildId,
+      botUserId,
+      staffRoleIds,
+    )
+  }
+
   try {
     const invite = /** @type {{ code: string }} */ (
       await rest.post(`/channels/${ids.formChannelId}/invites`, {
@@ -450,19 +565,32 @@ export async function registerSlashCommand(rest, applicationId, guildId) {
   const existing = /** @type {Array<{ name: string }>} */ (
     await rest.get(Routes.applicationGuildCommands(applicationId, guildId))
   )
-  if (existing.some((c) => c.name === 'comprovante-aprovado')) {
-    console.log('Slash /comprovante-aprovado already registered')
-    return
-  }
-  await rest.post(Routes.applicationGuildCommands(applicationId, guildId), {
-    body: {
+  const names = new Set(existing.map((c) => c.name))
+  const commands = [
+    {
       name: 'comprovante-aprovado',
       description:
         'Marca o ticket deste canal como pago e enfileira a entrega',
-      type: 1,
     },
-  })
-  console.log('Registered slash /comprovante-aprovado')
+    {
+      name: 'encerrar',
+      description: 'Encerra o ticket de dúvida, suporte ou reporte neste canal',
+    },
+  ]
+  for (const cmd of commands) {
+    if (names.has(cmd.name)) {
+      console.log(`Slash /${cmd.name} already registered`)
+      continue
+    }
+    await rest.post(Routes.applicationGuildCommands(applicationId, guildId), {
+      body: {
+        name: cmd.name,
+        description: cmd.description,
+        type: 1,
+      },
+    })
+    console.log(`Registered slash /${cmd.name}`)
+  }
 }
 
 export async function persistRuntimeConfig(supabase, ids) {
@@ -481,6 +609,7 @@ export async function persistRuntimeConfig(supabase, ids) {
     wl_result_interview_channel_id: ids.resultInterviewChannelId,
     beta_access_category_id: ids.betaAccessCategoryId || null,
     beta_access_channel_id: ids.betaAccessChannelId || null,
+    ticket_panel_channel_id: ids.ticketPanelChannelId || null,
     interview_role_id: ids.interviewRoleId,
     approved_role_id: ids.approvedRoleId,
     invite_url: ids.inviteUrl || null,
@@ -520,6 +649,9 @@ export function printEnvBlock(ids) {
       : '',
     ids.betaAccessChannelId
       ? `DISCORD_BETA_ACCESS_CHANNEL_ID=${ids.betaAccessChannelId}`
+      : '',
+    ids.ticketPanelChannelId
+      ? `DISCORD_TICKET_PANEL_CHANNEL_ID=${ids.ticketPanelChannelId}`
       : '',
     ids.inviteUrl ? `VITE_DISCORD_INVITE_URL=${ids.inviteUrl}` : '',
   ].filter(Boolean)

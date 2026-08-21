@@ -59,7 +59,7 @@ VITE_SITE_URL=http://localhost:5173
 
 ### 4. Loja — tickets Discord (atual) + Stripe (código)
 
-Checkout na UI: **Abrir ticket** → canal Discord. Guia: **[docs/discord-donation-tickets.md](./docs/discord-donation-tickets.md)**.
+Checkout na UI: **Abrir ticket** → canal Discord. Dúvida/suporte/reporte: canal **#tickets**. Guias: **[docs/discord-donation-tickets.md](./docs/discord-donation-tickets.md)** e **[docs/discord-tickets.md](./docs/discord-tickets.md)**.
 
 Stripe permanece no código para reativar depois: **[docs/stripe-store-setup.md](./docs/stripe-store-setup.md)**.
 

@@ -32,6 +32,15 @@ Guia: [discord-bot-setup.md](./discord-bot-setup.md)
 
 Guia: [discord-donation-tickets.md](./discord-donation-tickets.md)
 
+## Tickets de suporte (Discord)
+
+- [ ] Canal `#tickets` + embed com 3 botões (bot start / `!e4-setup`)
+- [ ] Deploy `discord-interactions` e `support-ticket-moderate`
+- [ ] Slash `/encerrar` registrado
+- [ ] Teste: abrir dúvida → Assumir → Encerrar → aparece em `/admin/tickets`
+
+Guia: [discord-tickets.md](./discord-tickets.md)
+
 ## Stripe / loja (pausado na UI — código permanece)
 
 - [ ] `STRIPE_SECRET_KEY` (test → live quando reativar)

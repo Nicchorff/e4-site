@@ -118,6 +118,7 @@ npx supabase secrets set \
 ```bash
 npx supabase functions deploy create-donation-ticket --project-ref dppyamtmjzmmkzjlmiew
 npx supabase functions deploy discord-interactions --project-ref dppyamtmjzmmkzjlmiew --no-verify-jwt
+npx supabase functions deploy support-ticket-moderate --project-ref dppyamtmjzmmkzjlmiew
 ```
 
 `discord-interactions` **deve** ter JWT verification desligada (`verify_jwt = false` em `supabase/config.toml`), senão o Discord não valida o endpoint.
@@ -159,8 +160,9 @@ Admin/Staff do sync (`DISCORD_ADMIN_ROLE_ID` / `DISCORD_STAFF_ROLE_ID`) também 
 - [ ] `DISCORD_PUBLIC_KEY` setado  
 - [ ] Interactions URL salva e “All your edits have been carefully secured” / endpoint validado  
 - [ ] Functions deployadas  
-- [ ] `/comprovante-aprovado` registrado no guild  
-- [ ] Role IDs em `/admin/doacoes`  
+- [ ] `/comprovante-aprovado` e `/encerrar` registrados no guild  
+- [ ] Role IDs em `/admin/doacoes` (valem para doação e suporte)  
+- [ ] Fila em `/admin/tickets`  
 - [ ] Teste: login → carrinho → Abrir ticket → Assumir → comando → pedido `paid` em `orders`  
 - [ ] EasyPanel: rebuild do site só se mudou copy/UI (sem secrets Stripe novos)
 

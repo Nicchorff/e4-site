@@ -46,6 +46,12 @@ const adminGroups = [
         keywords: ['tickets', 'discord', 'doacao', 'roles'],
       },
       {
+        label: 'Tickets',
+        href: '/admin/tickets',
+        icon: Ticket,
+        keywords: ['suporte', 'duvida', 'reporte', 'fila'],
+      },
+      {
         label: 'Depoimentos',
         href: '/admin/depoimentos',
         icon: MessageSquareQuote,
