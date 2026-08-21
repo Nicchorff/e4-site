@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import nacl from "https://esm.sh/tweetnacl@1.0.3";
 import { loadDiscordRuntimeConfig, withCeoAdminRole } from "../_shared/discord-config.ts";
+import { panelConfigured, panelLiberateWhitelist } from "../_shared/e4-panel.ts";
 
 function hexToUint8Array(hex: string) {
   if (hex.length % 2 !== 0) throw new Error("Invalid hex");
@@ -171,6 +172,151 @@ async function markTicketPaid(
   }
 
   return { ok: true as const, already: false };
+}
+
+function normalizeBetaKey(raw: string) {
+  return raw.trim().toUpperCase().replace(/\s+/g, "");
+}
+
+async function redeemBetaInvite(opts: {
+  admin: ReturnType<typeof createClient>;
+  botToken: string;
+  guildId: string;
+  approvedRoleId: string;
+  member: InteractionMember | undefined;
+  keyCode: string;
+  gameCode: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const keyCode = normalizeBetaKey(opts.keyCode);
+  const gameCode = opts.gameCode.trim();
+  const user = opts.member?.user;
+
+  if (!user?.id) {
+    return { ok: false, error: "Não foi possível identificar seu Discord." };
+  }
+  if (!keyCode) {
+    return { ok: false, error: "Informe a key do beta." };
+  }
+  if (!/^\d{6}$/.test(gameCode)) {
+    return { ok: false, error: "Código do jogo inválido. Use exatamente 6 dígitos." };
+  }
+  if (!panelConfigured()) {
+    return {
+      ok: false,
+      error: "Liberação do servidor indisponível. Avise a staff.",
+    };
+  }
+
+  const { data: key, error: keyErr } = await opts.admin
+    .from("beta_invite_keys")
+    .select("id, status")
+    .eq("code", keyCode)
+    .maybeSingle();
+
+  if (keyErr) {
+    console.error("beta key lookup", keyErr);
+    return { ok: false, error: "Falha ao consultar a key." };
+  }
+  if (!key || key.status !== "unused") {
+    return { ok: false, error: "Key inválida ou já utilizada." };
+  }
+
+  const { data: existingDiscord } = await opts.admin
+    .from("beta_invite_keys")
+    .select("id")
+    .eq("status", "redeemed")
+    .eq("redeemed_discord_id", user.id)
+    .maybeSingle();
+  if (existingDiscord) {
+    return { ok: false, error: "Você já vinculou uma key neste Discord." };
+  }
+
+  const { data: existingCode } = await opts.admin
+    .from("beta_invite_keys")
+    .select("id")
+    .eq("status", "redeemed")
+    .eq("game_code", gameCode)
+    .maybeSingle();
+  if (existingCode) {
+    return {
+      ok: false,
+      error: "Este código do jogo já está vinculado a outra key.",
+    };
+  }
+
+  const displayName =
+    opts.member?.nick || user.global_name || user.username || user.id;
+  const avatarUrl = discordAvatarUrl(user.id, user.avatar);
+  const now = new Date().toISOString();
+
+  const { data: claimed, error: claimErr } = await opts.admin
+    .from("beta_invite_keys")
+    .update({
+      status: "redeemed",
+      redeemed_at: now,
+      redeemed_discord_id: user.id,
+      redeemed_discord_username: displayName,
+      redeemed_discord_avatar_url: avatarUrl,
+      game_code: gameCode,
+    })
+    .eq("id", key.id)
+    .eq("status", "unused")
+    .select("id")
+    .maybeSingle();
+
+  if (claimErr || !claimed) {
+    return { ok: false, error: "Key inválida ou já utilizada." };
+  }
+
+  const liberated = await panelLiberateWhitelist(gameCode);
+  if (!liberated.ok) {
+    await opts.admin
+      .from("beta_invite_keys")
+      .update({
+        status: "unused",
+        redeemed_at: null,
+        redeemed_discord_id: null,
+        redeemed_discord_username: null,
+        redeemed_discord_avatar_url: null,
+        game_code: null,
+      })
+      .eq("id", key.id);
+
+    if (liberated.error === "code_not_found") {
+      return {
+        ok: false,
+        error:
+          "Código do jogo não encontrado. Entre no servidor uma vez para gerar o código e tente de novo.",
+      };
+    }
+    return {
+      ok: false,
+      error: "Não foi possível liberar no servidor. Tente mais tarde.",
+    };
+  }
+
+  await opts.admin
+    .from("beta_invite_keys")
+    .update({
+      fivem_account_id: liberated.account.id,
+      fivem_license: liberated.account.license,
+      fivem_discord: liberated.account.discord,
+    })
+    .eq("id", key.id);
+
+  if (opts.approvedRoleId && opts.guildId) {
+    try {
+      await discordApi(
+        opts.botToken,
+        "PUT",
+        `/guilds/${opts.guildId}/members/${user.id}/roles/${opts.approvedRoleId}`,
+      );
+    } catch (err) {
+      console.error("add approved role failed", err);
+    }
+  }
+
+  return { ok: true };
 }
 
 const BLOCKING_STATUSES = [
@@ -552,6 +698,7 @@ Deno.serve(async (req) => {
   const adminRoleId = cfg.adminRoleId;
   const staffRoleId = cfg.staffRoleId;
   const wlThreadChannelId = cfg.wlThreadChannelId;
+  const approvedRoleId = cfg.approvedRoleId;
 
   if (guildIdEnv && interaction.guild_id && interaction.guild_id !== guildIdEnv) {
     return interactionJson({
@@ -603,6 +750,46 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (customId === "beta_redeem_modal") {
+      const rows = interaction.data?.components ?? [];
+      let keyCode = "";
+      let gameCode = "";
+      for (const row of rows) {
+        for (const comp of row.components ?? []) {
+          if (comp.custom_id === "beta_key") keyCode = (comp.value ?? "").trim();
+          if (comp.custom_id === "beta_game_code") {
+            gameCode = (comp.value ?? "").trim();
+          }
+        }
+      }
+
+      const result = await redeemBetaInvite({
+        admin,
+        botToken,
+        guildId: interaction.guild_id ?? guildIdEnv ?? "",
+        approvedRoleId,
+        member: interaction.member,
+        keyCode,
+        gameCode,
+      });
+
+      if (!result.ok) {
+        return interactionJson({
+          type: 4,
+          data: { content: result.error, flags: 64 },
+        });
+      }
+
+      return interactionJson({
+        type: 4,
+        data: {
+          content:
+            "Acesso liberado. Sua key foi vinculada ao código do jogo. Entre no servidor.",
+          flags: 64,
+        },
+      });
+    }
+
     return interactionJson({
       type: 4,
       data: { content: "Modal não reconhecido.", flags: 64 },
@@ -639,6 +826,48 @@ Deno.serve(async (req) => {
                 {
                   type: 4,
                   custom_id: "wl_game_code",
+                  label: "Código do jogo (6 dígitos)",
+                  style: 1,
+                  min_length: 6,
+                  max_length: 6,
+                  placeholder: "482193",
+                  required: true,
+                },
+              ],
+            },
+          ],
+        },
+      });
+    }
+
+    if (interaction.type === 3 && customId === "beta_redeem_start") {
+      return interactionJson({
+        type: 9,
+        data: {
+          custom_id: "beta_redeem_modal",
+          title: "Liberar acesso beta",
+          components: [
+            {
+              type: 1,
+              components: [
+                {
+                  type: 4,
+                  custom_id: "beta_key",
+                  label: "Código da key",
+                  style: 1,
+                  min_length: 8,
+                  max_length: 20,
+                  placeholder: "E4-XXXX-XXXX",
+                  required: true,
+                },
+              ],
+            },
+            {
+              type: 1,
+              components: [
+                {
+                  type: 4,
+                  custom_id: "beta_game_code",
                   label: "Código do jogo (6 dígitos)",
                   style: 1,
                   min_length: 6,

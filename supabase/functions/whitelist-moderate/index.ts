@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { loadDiscordRuntimeConfig, withCeoAdminRole } from "../_shared/discord-config.ts";
+import { liberateGameWhitelist } from "../_shared/e4-panel.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -107,30 +108,6 @@ async function postResult(
     content: content ?? undefined,
     embeds: [embed],
   });
-}
-
-async function liberateWhitelist(gameCode: string) {
-  const url =
-    Deno.env.get("FIVEM_WHITELIST_URL") ??
-    "http://104.234.63.28:30120/vrp/whitelist";
-  const auth = Deno.env.get("FIVEM_WHITELIST_TOKEN");
-  if (!auth) {
-    throw new Error("FIVEM_WHITELIST_TOKEN não configurado");
-  }
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${auth}`,
-    },
-    body: JSON.stringify({ code: gameCode, whitelist: 1 }),
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`vRP whitelist failed (${res.status}): ${text}`);
-  }
-  return text;
 }
 
 type Action =
@@ -282,7 +259,7 @@ Deno.serve(async (req) => {
       }
 
       try {
-        await liberateWhitelist(app.game_code);
+        await liberateGameWhitelist(app.game_code);
       } catch (err) {
         return json(
           {

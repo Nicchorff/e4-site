@@ -13,7 +13,11 @@ export type DiscordRuntimeConfig = {
   wlResultInterviewChannelId: string;
   interviewRoleId: string;
   approvedRoleId: string;
+  betaAccessCategoryId: string;
+  betaAccessChannelId: string;
 };
+
+export const DEFAULT_BETA_ACCESS_CATEGORY_ID = "1534358251867607071";
 
 function pick(envKey: string, dbVal?: string | null) {
   return (Deno.env.get(envKey) || dbVal || "").trim();
@@ -89,5 +93,12 @@ export async function loadDiscordRuntimeConfig(
       data?.interview_role_id,
     ),
     approvedRoleId: pick("DISCORD_WL_APPROVED_ROLE_ID", data?.approved_role_id),
+    betaAccessCategoryId:
+      pick("DISCORD_BETA_ACCESS_CATEGORY_ID", data?.beta_access_category_id) ||
+      DEFAULT_BETA_ACCESS_CATEGORY_ID,
+    betaAccessChannelId: pick(
+      "DISCORD_BETA_ACCESS_CHANNEL_ID",
+      data?.beta_access_channel_id,
+    ),
   };
 }

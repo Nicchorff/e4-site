@@ -44,6 +44,10 @@ const WL_CHANNELS = [
   { key: 'resultInterviewChannelId', name: 'resultado-entrevista' },
 ]
 
+const DEFAULT_BETA_ACCESS_CATEGORY_ID = '1534358251867607071'
+const BETA_CHANNEL_NAME = '🔴liberar-acesso-beta'
+const BETA_CHANNEL_MATCH = 'liberar-acesso-beta'
+
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
 }
@@ -158,6 +162,8 @@ export async function ensureGuildSetup({ rest, guildId, botUserId }) {
     threadChannelId: '',
     resultFormChannelId: '',
     resultInterviewChannelId: '',
+    betaAccessCategoryId: '',
+    betaAccessChannelId: '',
     inviteUrl: '',
   }
 
@@ -294,6 +300,55 @@ export async function ensureGuildSetup({ rest, guildId, botUserId }) {
     }
   }
 
+  const betaCategoryId =
+    process.env.DISCORD_BETA_ACCESS_CATEGORY_ID ||
+    DEFAULT_BETA_ACCESS_CATEGORY_ID
+  const betaCategory = channels.find(
+    (ch) =>
+      ch.type === ChannelType.GuildCategory && ch.id === betaCategoryId,
+  )
+  if (betaCategory) {
+    ids.betaAccessCategoryId = betaCategory.id
+    console.log(`Using beta category ${betaCategory.name} ${betaCategory.id}`)
+    const existingBeta = channels.find((ch) => {
+      const name = String(ch.name || '').toLowerCase()
+      return (
+        ch.type === ChannelType.GuildText &&
+        (name.includes(BETA_CHANNEL_MATCH) ||
+          name.includes('liberar acesso beta'))
+      )
+    })
+    if (existingBeta) {
+      ids.betaAccessChannelId = existingBeta.id
+      console.log(`Reusing channel #${existingBeta.name} ${existingBeta.id}`)
+    } else {
+      try {
+        const created = /** @type {{ id: string, name: string, type: number }} */ (
+          await rest.post(Routes.guildChannels(guildId), {
+            body: {
+              name: BETA_CHANNEL_NAME,
+              type: ChannelType.GuildText,
+              parent_id: betaCategory.id,
+              topic: 'Informe a key do beta e o código do jogo para liberar o acesso.',
+            },
+          })
+        )
+        ids.betaAccessChannelId = created.id
+        channels.push(created)
+        console.log(`Created channel #${created.name} ${created.id}`)
+      } catch (err) {
+        console.error(
+          `Failed creating beta access channel: ${discordErr(err)}`,
+        )
+      }
+      await sleep(350)
+    }
+  } else {
+    console.warn(
+      `Beta category ${betaCategoryId} not found. Create it or set DISCORD_BETA_ACCESS_CATEGORY_ID.`,
+    )
+  }
+
   try {
     const invite = /** @type {{ code: string }} */ (
       await rest.post(`/channels/${ids.formChannelId}/invites`, {
@@ -341,6 +396,8 @@ export async function persistRuntimeConfig(supabase, ids) {
     wl_thread_channel_id: ids.threadChannelId,
     wl_result_form_channel_id: ids.resultFormChannelId,
     wl_result_interview_channel_id: ids.resultInterviewChannelId,
+    beta_access_category_id: ids.betaAccessCategoryId || null,
+    beta_access_channel_id: ids.betaAccessChannelId || null,
     interview_role_id: ids.interviewRoleId,
     approved_role_id: ids.approvedRoleId,
     invite_url: ids.inviteUrl || null,
@@ -375,6 +432,12 @@ export function printEnvBlock(ids) {
     `DISCORD_WL_RESULT_INTERVIEW_CHANNEL_ID=${ids.resultInterviewChannelId}`,
     `DISCORD_WL_INTERVIEW_ROLE_ID=${ids.interviewRoleId}`,
     `DISCORD_WL_APPROVED_ROLE_ID=${ids.approvedRoleId}`,
+    ids.betaAccessCategoryId
+      ? `DISCORD_BETA_ACCESS_CATEGORY_ID=${ids.betaAccessCategoryId}`
+      : '',
+    ids.betaAccessChannelId
+      ? `DISCORD_BETA_ACCESS_CHANNEL_ID=${ids.betaAccessChannelId}`
+      : '',
     ids.inviteUrl ? `VITE_DISCORD_INVITE_URL=${ids.inviteUrl}` : '',
   ].filter(Boolean)
   console.log('\n--- copy to EasyPanel / Supabase secrets ---\n')

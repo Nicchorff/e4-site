@@ -58,6 +58,12 @@ const adminGroups = [
         keywords: ['cargos', 'discord', 'profiles'],
       },
       {
+        label: 'Convites',
+        href: '/admin/convites',
+        icon: Ticket,
+        keywords: ['beta', 'key', 'convite', 'whitelist'],
+      },
+      {
         label: 'WL · Perguntas',
         href: '/admin/whitelist/perguntas',
         icon: ClipboardList,

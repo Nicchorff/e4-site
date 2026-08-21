@@ -51,6 +51,8 @@ DISCORD_WL_INTERVIEW_ROLE_ID=
 DISCORD_WL_APPROVED_ROLE_ID=
 FIVEM_WHITELIST_URL=http://104.234.63.28:30120/vrp/whitelist
 FIVEM_WHITELIST_TOKEN=
+E4_PANEL_URL=http://IP_DA_VPS:8099
+E4_PANEL_SITE_TOKEN=
 ```
 
 Deploy das functions:
@@ -85,6 +87,8 @@ SUPABASE_SERVICE_ROLE_KEY=  # Supabase → Project Settings → API → service_
 # Canais opcionais — o bot cria no start se vazios
 DISCORD_WL_FORM_CHANNEL_ID=
 DISCORD_WL_THREAD_CHANNEL_ID=
+DISCORD_BETA_ACCESS_CATEGORY_ID=1534358251867607071
+DISCORD_BETA_ACCESS_CHANNEL_ID=
 ```
 
 ### EasyPanel
@@ -113,6 +117,7 @@ No start, o bot posta ou edita o embed no canal do formulário. Admin: `!wl-refr
 | `/admin/whitelist/perguntas` | CRUD perguntas + texto/imagem do embed |
 | `/admin/whitelist/formularios` | Lista `pending_review`, ver Q&A, aprovar/recusar |
 | `/admin/whitelist/entrevistas` | Lista `interview`, aprovar (vRP) / recusar com motivo |
+| `/admin/convites` | Keys do beta fechado e vínculos Discord + conta FiveM |
 
 ---
 

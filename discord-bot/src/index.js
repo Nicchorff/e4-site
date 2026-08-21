@@ -24,6 +24,7 @@ const token = process.env.DISCORD_BOT_TOKEN
 const supabaseUrl = process.env.SUPABASE_URL
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 let formChannelId = process.env.DISCORD_WL_FORM_CHANNEL_ID || ''
+let betaAccessChannelId = process.env.DISCORD_BETA_ACCESS_CHANNEL_ID || ''
 
 if (!token || !supabaseUrl || !serviceKey) {
   console.error(
@@ -180,6 +181,89 @@ async function ensureFormEmbed() {
       'ensureFormEmbed failed (bot stays online). Fix channel perms for',
       formChannelId,
       '→',
+      err?.message ?? err,
+    )
+  }
+}
+
+function buildBetaEmbed() {
+  const embed = new EmbedBuilder()
+    .setTitle('🔴 Liberar acesso beta')
+    .setDescription(
+      '**Beta fechado Elite Four**\n\n' +
+        'Você precisa de uma **key** gerada pela staff.\n' +
+        'No jogo, copie o código de **6 dígitos** e informe os dois campos.\n\n' +
+        'Se a key não existir ou já tiver sido usada, o acesso **não** é liberado.',
+    )
+    .setColor(0xed4245)
+    .setFooter({ text: 'Elite Four · beta fechado' })
+    .setTimestamp()
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('beta_redeem_start')
+      .setLabel('Liberar acesso')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('🔑'),
+  )
+
+  return { embeds: [embed], components: [row] }
+}
+
+async function loadBetaEmbedMessageId() {
+  const { data } = await supabase
+    .from('discord_runtime_config')
+    .select('beta_embed_message_id')
+    .eq('id', 1)
+    .maybeSingle()
+  return data?.beta_embed_message_id || null
+}
+
+async function ensureBetaEmbed() {
+  if (!betaAccessChannelId) return
+  try {
+    const channel = await client.channels.fetch(betaAccessChannelId).catch((err) => {
+      console.error(
+        'Cannot fetch beta access channel',
+        betaAccessChannelId,
+        err?.message ?? err,
+      )
+      return null
+    })
+    if (!channel || !channel.isTextBased()) {
+      console.error(
+        'Beta access channel missing or inaccessible',
+        betaAccessChannelId,
+      )
+      return
+    }
+
+    const payload = buildBetaEmbed()
+    const existingId = await loadBetaEmbedMessageId()
+    if (existingId) {
+      try {
+        const existing = await channel.messages.fetch(existingId)
+        await existing.edit(payload)
+        console.log('Updated beta access embed', existingId)
+        return
+      } catch {
+        console.warn('Stored beta embed missing; posting a new one')
+      }
+    }
+
+    const msg = await channel.send(payload)
+    await supabase
+      .from('discord_runtime_config')
+      .update({
+        beta_embed_message_id: msg.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', 1)
+    console.log('Posted beta access embed', msg.id)
+  } catch (err) {
+    console.error(
+      'ensureBetaEmbed failed',
+      betaAccessChannelId,
       err?.message ?? err,
     )
   }
@@ -356,11 +440,15 @@ client.once(Events.ClientReady, async (c) => {
         botUserId: c.user.id,
       })
       formChannelId = ids.formChannelId || formChannelId
+      betaAccessChannelId = ids.betaAccessChannelId || betaAccessChannelId
       if (ids.formChannelId) {
         process.env.DISCORD_WL_FORM_CHANNEL_ID = ids.formChannelId
       }
       if (ids.threadChannelId) {
         process.env.DISCORD_WL_THREAD_CHANNEL_ID = ids.threadChannelId
+      }
+      if (ids.betaAccessChannelId) {
+        process.env.DISCORD_BETA_ACCESS_CHANNEL_ID = ids.betaAccessChannelId
       }
       process.env.DISCORD_GUILD_ID = guildId
       printEnvBlock(ids)
@@ -376,6 +464,13 @@ client.once(Events.ClientReady, async (c) => {
   } else {
     console.error(
       'No whitelist form channel. Move the E4 bot role to the top, then restart or type !e4-setup.',
+    )
+  }
+  if (betaAccessChannelId) {
+    await ensureBetaEmbed()
+  } else {
+    console.warn(
+      'No beta access channel. Set DISCORD_BETA_ACCESS_CATEGORY_ID or run !e4-setup.',
     )
   }
 })
@@ -413,20 +508,21 @@ client.on(Events.MessageCreate, async (message) => {
         botUserId: client.user.id,
       })
       formChannelId = ids.formChannelId
+      betaAccessChannelId = ids.betaAccessChannelId || betaAccessChannelId
       printEnvBlock(ids)
       await persistRuntimeConfig(supabase, ids)
       await registerSlashCommand(client.rest, client.user.id, guildId)
       if (ids.formChannelId) {
         formChannelId = ids.formChannelId
         await ensureFormEmbed()
-        await message.channel.send(
-          `Setup ok. Form: <#${ids.formChannelId}> · invite: ${ids.inviteUrl || 'n/a'}`,
-        )
-      } else {
-        await message.channel.send(
-          'Cargos/tickets ok, mas a whitelist não criou canal. Suba o cargo E4 para o topo e rode !e4-setup de novo.',
-        )
       }
+      if (ids.betaAccessChannelId) {
+        betaAccessChannelId = ids.betaAccessChannelId
+        await ensureBetaEmbed()
+      }
+      await message.channel.send(
+        `Setup ok. Form: ${ids.formChannelId ? `<#${ids.formChannelId}>` : 'n/a'} · Beta: ${ids.betaAccessChannelId ? `<#${ids.betaAccessChannelId}>` : 'n/a'} · invite: ${ids.inviteUrl || 'n/a'}`,
+      )
     } catch (err) {
       await message.channel.send(`Setup falhou: ${err?.message ?? err}`)
     }

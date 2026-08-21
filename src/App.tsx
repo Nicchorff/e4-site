@@ -69,6 +69,11 @@ const AdminWhitelistEntrevistasPage = lazy(() =>
     default: m.AdminWhitelistEntrevistasPage,
   })),
 )
+const AdminConvitesPage = lazy(() =>
+  import('@/pages/AdminConvitesPage').then((m) => ({
+    default: m.AdminConvitesPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -177,6 +182,14 @@ export default function App() {
                     element={
                       <RequireAdmin>
                         <AdminWhitelistEntrevistasPage />
+                      </RequireAdmin>
+                    }
+                  />
+                  <Route
+                    path="admin/convites"
+                    element={
+                      <RequireAdmin>
+                        <AdminConvitesPage />
                       </RequireAdmin>
                     }
                   />

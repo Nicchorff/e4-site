@@ -31,6 +31,11 @@ const sections = [
     blurb: 'Perfis e cargos do Discord (read-only)',
   },
   {
+    to: '/admin/convites',
+    title: 'Convites',
+    blurb: 'Keys do beta fechado e quem está vinculado',
+  },
+  {
     to: '/admin/whitelist/perguntas',
     title: 'WL · Perguntas',
     blurb: 'Perguntas e embed do formulário Discord',
