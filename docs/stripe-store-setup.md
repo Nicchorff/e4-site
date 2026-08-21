@@ -2,7 +2,7 @@
 
 Catálogo e pedidos ficam no **Supabase**. A **Stripe** só processa o pagamento (Checkout Session + webhook). Sem Tebex / Billing / Invoicing nesta etapa.
 
-**Produção atual:** `https://sites-e4.ltgujx.easypanel.host`
+**Produção atual:** `https://sites-e4-site.ond9ub.easypanel.host`
 
 ## Fluxo
 
@@ -17,7 +17,7 @@ Catálogo e pedidos ficam no **Supabase**. A **Stripe** só processa o pagamento
 ### EasyPanel — Build args (front)
 
 ```env
-VITE_SITE_URL=https://sites-e4.ltgujx.easypanel.host
+VITE_SITE_URL=https://sites-e4-site.ond9ub.easypanel.host
 VITE_SUPABASE_URL=https://dppyamtmjzmmkzjlmiew.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon key>
 VITE_DISCORD_INVITE_URL=https://discord.gg/...
@@ -32,7 +32,7 @@ Rebuild da imagem após mudar qualquer `VITE_*`.
 |---|---|
 | `STRIPE_SECRET_KEY` | `sk_test_…` / `sk_live_…` |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_…` do endpoint webhook |
-| `SITE_URL` | `https://sites-e4.ltgujx.easypanel.host` |
+| `SITE_URL` | `https://sites-e4-site.ond9ub.easypanel.host` |
 | `FIVEM_API_KEY` | Header `x-api-key` das functions FiveM |
 
 `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` já existem no runtime.

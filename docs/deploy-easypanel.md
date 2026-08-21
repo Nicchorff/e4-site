@@ -8,7 +8,7 @@ O Vite embute `VITE_*` no bundle. No EasyPanel (ou `docker build`), passe:
 
 | Build arg | Exemplo |
 |---|---|
-| `VITE_SITE_URL` | `https://SEU_DOMINIO` |
+| `VITE_SITE_URL` | `https://sites-e4-site.ond9ub.easypanel.host` |
 | `VITE_SUPABASE_URL` | `https://dppyamtmjzmmkzjlmiew.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | anon key pública |
 | `VITE_DISCORD_INVITE_URL` | invite do servidor |
@@ -42,6 +42,32 @@ docker run --rm -p 8080:80 e4-site
 
 Repo GitHub: `Nicchorff/e4-site`, branch `main`. Projeto sugerido: `sites`.
 
+**Produção atual:** `https://sites-e4-site.ond9ub.easypanel.host`
+
+### App do bot (segundo serviço)
+
+No mesmo projeto `sites`: **+ Serviço** → App.
+
+| Campo EasyPanel | Valor |
+|---|---|
+| Método | Dockerfile |
+| Arquivo | `discord-bot/Dockerfile` |
+| Context | `.` (raiz) |
+| Porta / domínio | nenhum |
+
+**Environment** (e Build Args, se existir as duas abas — cole nos dois):
+
+```
+DISCORD_BOT_TOKEN=
+DISCORD_GUILD_ID=
+SUPABASE_URL=https://dppyamtmjzmmkzjlmiew.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+`DISCORD_GUILD_ID`: clique direito no ícone do servidor **novo** → Copiar ID (precisa **Modo desenvolvedor**). Token: Developer Portal → Bot → Copy (sem Reset). Service role: Supabase → Project Settings → API.
+
+Não preencha canal IDs. Deploy → logs: `Whitelist bot ready` + bloco de IDs.
+
 ### Opção A — Compose (um app, dois serviços)
 
 1. Create → App → **Docker Compose**
@@ -49,7 +75,7 @@ Repo GitHub: `Nicchorff/e4-site`, branch `main`. Projeto sugerido: `sites`.
 3. Environment / build args:
 
 ```
-VITE_SITE_URL=https://SEU_DOMINIO
+VITE_SITE_URL=https://sites-e4-site.ond9ub.easypanel.host
 VITE_SUPABASE_URL=https://dppyamtmjzmmkzjlmiew.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRwcHlhbXRtanptbWt6amxtaWV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxNzYxMTQsImV4cCI6MjEwMDc1MjExNH0.KirZOIr4WNisd8eqPMvv0lwp7fvRGZZvOzrvjPsgAvg
 VITE_DISCORD_INVITE_URL=https://discord.gg/SEU_INVITE
@@ -88,9 +114,9 @@ No primeiro start o bot cria cargos/canais no guild, registra `/comprovante-apro
 
 | Onde | Valor |
 |---|---|
-| Supabase Auth redirect allow list | `https://SEU_DOMINIO/auth/discord/callback` |
+| Supabase Auth redirect allow list | `https://sites-e4-site.ond9ub.easypanel.host/auth/discord/callback` |
 | Discord OAuth (callback do Supabase) | `https://dppyamtmjzmmkzjlmiew.supabase.co/auth/v1/callback` |
-| Edge `SITE_URL` | `https://SEU_DOMINIO` |
+| Edge `SITE_URL` | `https://sites-e4-site.ond9ub.easypanel.host` |
 | Stripe webhook | `https://dppyamtmjzmmkzjlmiew.supabase.co/functions/v1/stripe-webhook` |
 | `robots.txt` / `sitemap.xml` | atualizar host para `https://SEU_DOMINIO` |
 

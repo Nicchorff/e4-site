@@ -105,6 +105,39 @@ function findByName(list, name) {
   return list.find((item) => String(item.name ?? '').toLowerCase() === target)
 }
 
+function discordErr(err) {
+  const raw = err?.rawError ?? err
+  const code = raw?.code ?? err?.code
+  const msg = err?.message ?? String(err)
+  return code != null ? `${msg} (code ${code})` : msg
+}
+
+async function tryApplyTicketOverwrites(
+  rest,
+  categoryId,
+  guildId,
+  botUserId,
+  staffRoleIds,
+) {
+  try {
+    await rest.put(`/channels/${categoryId}/permissions/${guildId}`, {
+      body: denyViewEveryone(guildId),
+    })
+    await rest.put(`/channels/${categoryId}/permissions/${botUserId}`, {
+      body: allowViewMember(botUserId),
+    })
+    for (const roleId of staffRoleIds) {
+      await rest.put(`/channels/${categoryId}/permissions/${roleId}`, {
+        body: allowViewRole(roleId),
+      })
+    }
+  } catch (err) {
+    console.warn(
+      `Skip permission overwrite on ${categoryId}: ${discordErr(err)}. Move the E4 bot role to the top of the role list if tickets should stay hidden from @everyone.`,
+    )
+  }
+}
+
 /**
  * @param {{ rest: import('discord.js').REST, guildId: string, botUserId: string }} opts
  */
@@ -151,11 +184,6 @@ export async function ensureGuildSetup({ rest, guildId, botUserId }) {
   }
 
   const staffRoleIds = [ids.adminRoleId, ids.staffRoleId].filter(Boolean)
-  const ticketOverwrites = [
-    denyViewEveryone(guildId),
-    allowViewMember(botUserId),
-    ...staffRoleIds.map(allowViewRole),
-  ]
 
   let channels = /** @type {Array<{ id: string, name: string, type: number, parent_id?: string | null }>} */ (
     await rest.get(Routes.guildChannels(guildId))
@@ -169,32 +197,41 @@ export async function ensureGuildSetup({ rest, guildId, botUserId }) {
     )
     if (existing) {
       ids[spec.key] = existing.id
-      await rest.put(`/channels/${existing.id}/permissions/${guildId}`, {
-        body: denyViewEveryone(guildId),
-      })
-      await rest.put(`/channels/${existing.id}/permissions/${botUserId}`, {
-        body: allowViewMember(botUserId),
-      })
-      for (const roleId of staffRoleIds) {
-        await rest.put(`/channels/${existing.id}/permissions/${roleId}`, {
-          body: allowViewRole(roleId),
-        })
-      }
+      console.log(`Reusing category ${spec.name} ${existing.id}`)
+      await tryApplyTicketOverwrites(
+        rest,
+        existing.id,
+        guildId,
+        botUserId,
+        staffRoleIds,
+      )
       await sleep(250)
       continue
     }
-    const created = /** @type {{ id: string, name: string, type: number }} */ (
-      await rest.post(Routes.guildChannels(guildId), {
-        body: {
-          name: spec.name,
-          type: ChannelType.GuildCategory,
-          permission_overwrites: ticketOverwrites,
-        },
-      })
-    )
-    ids[spec.key] = created.id
-    channels.push(created)
-    console.log(`Created category ${spec.name} ${created.id}`)
+    try {
+      const created = /** @type {{ id: string, name: string, type: number }} */ (
+        await rest.post(Routes.guildChannels(guildId), {
+          body: {
+            name: spec.name,
+            type: ChannelType.GuildCategory,
+          },
+        })
+      )
+      ids[spec.key] = created.id
+      channels.push(created)
+      console.log(`Created category ${spec.name} ${created.id}`)
+      await tryApplyTicketOverwrites(
+        rest,
+        created.id,
+        guildId,
+        botUserId,
+        staffRoleIds,
+      )
+    } catch (err) {
+      console.error(
+        `Failed creating category ${spec.name}: ${discordErr(err)}`,
+      )
+    }
     await sleep(350)
   }
 
@@ -204,42 +241,57 @@ export async function ensureGuildSetup({ rest, guildId, botUserId }) {
       String(ch.name).toLowerCase() === 'whitelist',
   )
   if (!wlCategory) {
-    wlCategory = /** @type {{ id: string, name: string, type: number }} */ (
-      await rest.post(Routes.guildChannels(guildId), {
-        body: {
-          name: 'Whitelist',
-          type: ChannelType.GuildCategory,
-        },
-      })
-    )
-    channels.push(wlCategory)
-    console.log(`Created category Whitelist ${wlCategory.id}`)
-    await sleep(350)
+    try {
+      wlCategory = /** @type {{ id: string, name: string, type: number }} */ (
+        await rest.post(Routes.guildChannels(guildId), {
+          body: {
+            name: 'Whitelist',
+            type: ChannelType.GuildCategory,
+          },
+        })
+      )
+      channels.push(wlCategory)
+      console.log(`Created category Whitelist ${wlCategory.id}`)
+      await sleep(350)
+    } catch (err) {
+      console.error(`Failed creating category Whitelist: ${discordErr(err)}`)
+    }
+  } else {
+    console.log(`Reusing category Whitelist ${wlCategory.id}`)
   }
 
-  for (const spec of WL_CHANNELS) {
-    const existing = channels.find(
-      (ch) =>
-        ch.type === ChannelType.GuildText &&
-        String(ch.name).toLowerCase() === spec.name,
-    )
-    if (existing) {
-      ids[spec.key] = existing.id
-      continue
+  if (wlCategory) {
+    for (const spec of WL_CHANNELS) {
+      const existing = channels.find(
+        (ch) =>
+          ch.type === ChannelType.GuildText &&
+          String(ch.name).toLowerCase() === spec.name,
+      )
+      if (existing) {
+        ids[spec.key] = existing.id
+        console.log(`Reusing channel #${spec.name} ${existing.id}`)
+        continue
+      }
+      try {
+        const created = /** @type {{ id: string, name: string, type: number }} */ (
+          await rest.post(Routes.guildChannels(guildId), {
+            body: {
+              name: spec.name,
+              type: ChannelType.GuildText,
+              parent_id: wlCategory.id,
+            },
+          })
+        )
+        ids[spec.key] = created.id
+        channels.push(created)
+        console.log(`Created channel #${spec.name} ${created.id}`)
+      } catch (err) {
+        console.error(
+          `Failed creating channel #${spec.name}: ${discordErr(err)}`,
+        )
+      }
+      await sleep(350)
     }
-    const created = /** @type {{ id: string, name: string, type: number }} */ (
-      await rest.post(Routes.guildChannels(guildId), {
-        body: {
-          name: spec.name,
-          type: ChannelType.GuildText,
-          parent_id: wlCategory.id,
-        },
-      })
-    )
-    ids[spec.key] = created.id
-    channels.push(created)
-    console.log(`Created channel #${spec.name} ${created.id}`)
-    await sleep(350)
   }
 
   try {

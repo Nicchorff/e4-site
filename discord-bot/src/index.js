@@ -133,6 +133,7 @@ function buildFormEmbed(settings) {
 }
 
 async function ensureFormEmbed() {
+  if (!formChannelId) return
   try {
     const channel = await client.channels.fetch(formChannelId).catch((err) => {
       console.error(
@@ -354,9 +355,13 @@ client.once(Events.ClientReady, async (c) => {
         guildId,
         botUserId: c.user.id,
       })
-      formChannelId = ids.formChannelId
-      process.env.DISCORD_WL_FORM_CHANNEL_ID = ids.formChannelId
-      process.env.DISCORD_WL_THREAD_CHANNEL_ID = ids.threadChannelId
+      formChannelId = ids.formChannelId || formChannelId
+      if (ids.formChannelId) {
+        process.env.DISCORD_WL_FORM_CHANNEL_ID = ids.formChannelId
+      }
+      if (ids.threadChannelId) {
+        process.env.DISCORD_WL_THREAD_CHANNEL_ID = ids.threadChannelId
+      }
       process.env.DISCORD_GUILD_ID = guildId
       printEnvBlock(ids)
       await persistRuntimeConfig(supabase, ids)
@@ -365,13 +370,14 @@ client.once(Events.ClientReady, async (c) => {
       console.error('Guild setup failed', err?.message ?? err)
     }
   }
-  if (!formChannelId) {
+  await loadActiveApplications()
+  if (formChannelId) {
+    await ensureFormEmbed()
+  } else {
     console.error(
-      'No whitelist form channel. Set DISCORD_WL_FORM_CHANNEL_ID or fix guild setup.',
+      'No whitelist form channel. Move the E4 bot role to the top, then restart or type !e4-setup.',
     )
   }
-  await loadActiveApplications()
-  await ensureFormEmbed()
 })
 
 client.on(Events.MessageCreate, (message) => {
@@ -410,10 +416,17 @@ client.on(Events.MessageCreate, async (message) => {
       printEnvBlock(ids)
       await persistRuntimeConfig(supabase, ids)
       await registerSlashCommand(client.rest, client.user.id, guildId)
-      await ensureFormEmbed()
-      await message.channel.send(
-        `Setup ok. Form: <#${ids.formChannelId}> · invite: ${ids.inviteUrl || 'n/a'}`,
-      )
+      if (ids.formChannelId) {
+        formChannelId = ids.formChannelId
+        await ensureFormEmbed()
+        await message.channel.send(
+          `Setup ok. Form: <#${ids.formChannelId}> · invite: ${ids.inviteUrl || 'n/a'}`,
+        )
+      } else {
+        await message.channel.send(
+          'Cargos/tickets ok, mas a whitelist não criou canal. Suba o cargo E4 para o topo e rode !e4-setup de novo.',
+        )
+      }
     } catch (err) {
       await message.channel.send(`Setup falhou: ${err?.message ?? err}`)
     }
