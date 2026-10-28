@@ -5,6 +5,7 @@ import {
   MessageSquareQuote,
   Package,
   ScrollText,
+  Settings,
   Ticket,
   UserCheck,
   Users,
@@ -44,6 +45,12 @@ const adminGroups = [
         href: '/admin/doacoes',
         icon: Ticket,
         keywords: ['tickets', 'discord', 'doacao', 'roles'],
+      },
+      {
+        label: 'Discord',
+        href: '/admin/discord',
+        icon: Settings,
+        keywords: ['cargos', 'roles', 'canais', 'aprovado', 'staff'],
       },
       {
         label: 'Tickets',

@@ -505,7 +505,9 @@ async function redeemBetaInvite(opts: {
   member: InteractionMember | undefined;
   keyCode: string;
   gameCode: string;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<
+  { ok: true; roleAssigned: boolean } | { ok: false; error: string }
+> {
   const keyCode = normalizeBetaKey(opts.keyCode);
   const gameCode = opts.gameCode.trim();
   const user = opts.member?.user;
@@ -614,7 +616,7 @@ async function redeemBetaInvite(opts: {
     };
   }
 
-  await opts.admin
+  const { error: fivemErr } = await opts.admin
     .from("beta_invite_keys")
     .update({
       fivem_account_id: liberated.account.id,
@@ -622,7 +624,11 @@ async function redeemBetaInvite(opts: {
       fivem_discord: liberated.account.discord,
     })
     .eq("id", key.id);
+  if (fivemErr) {
+    console.error("beta key fivem link failed", key.id, fivemErr);
+  }
 
+  let roleAssigned = false;
   if (opts.approvedRoleId && opts.guildId) {
     try {
       await discordApi(
@@ -630,12 +636,15 @@ async function redeemBetaInvite(opts: {
         "PUT",
         `/guilds/${opts.guildId}/members/${user.id}/roles/${opts.approvedRoleId}`,
       );
+      roleAssigned = true;
     } catch (err) {
       console.error("add approved role failed", err);
     }
+  } else {
+    console.error("approved role or guild missing for beta redeem");
   }
 
-  return { ok: true };
+  return { ok: true, roleAssigned };
 }
 
 const BLOCKING_STATUSES = [
@@ -1094,6 +1103,81 @@ Deno.serve(async (req) => {
     return interactionJson({ type: 5, data: { flags: 64 } });
   }
 
+  if (
+    interaction.type === 5 &&
+    interaction.data?.custom_id === "beta_redeem_modal"
+  ) {
+    const applicationId = interaction.application_id ?? "";
+    const interactionToken = interaction.token ?? "";
+
+    EdgeRuntime.waitUntil(
+      (async () => {
+        const reply = async (content: string) => {
+          if (!applicationId || !interactionToken) return;
+          await editOriginalInteraction(
+            applicationId,
+            interactionToken,
+            content,
+          );
+        };
+        try {
+          const rows = interaction.data?.components ?? [];
+          let keyCode = "";
+          let gameCode = "";
+          for (const row of rows) {
+            for (const comp of row.components ?? []) {
+              if (comp.custom_id === "beta_key") {
+                keyCode = (comp.value ?? "").trim();
+              }
+              if (comp.custom_id === "beta_game_code") {
+                gameCode = (comp.value ?? "").trim();
+              }
+            }
+          }
+
+          const admin = createClient(supabaseUrl, serviceKey);
+          const cfg = await withCeoAdminRole(
+            await loadDiscordRuntimeConfig(admin),
+            botToken,
+          );
+          if (
+            cfg.guildId &&
+            interaction.guild_id &&
+            interaction.guild_id !== cfg.guildId
+          ) {
+            await reply("Guild não autorizado.");
+            return;
+          }
+
+          const result = await redeemBetaInvite({
+            admin,
+            botToken,
+            guildId: interaction.guild_id ?? cfg.guildId ?? "",
+            approvedRoleId: cfg.approvedRoleId,
+            member: interaction.member,
+            keyCode,
+            gameCode,
+          });
+
+          if (!result.ok) {
+            await reply(result.error);
+            return;
+          }
+          await reply(
+            result.roleAssigned
+              ? "Acesso liberado. Sua key foi vinculada ao código do jogo. Entre no servidor."
+              : "Acesso liberado. Sua key foi vinculada ao código do jogo. Entre no servidor. Whitelist ok; avise a staff se o cargo não aparecer.",
+          );
+        } catch (err) {
+          console.error("beta_redeem_modal failed", err);
+          await reply("Falha ao liberar o acesso. Avise a staff.");
+        }
+      })(),
+    );
+
+    return interactionJson({ type: 5, data: { flags: 64 } });
+  }
+
   const admin = createClient(supabaseUrl, serviceKey);
   const cfg = await withCeoAdminRole(
     await loadDiscordRuntimeConfig(admin),
@@ -1105,7 +1189,6 @@ Deno.serve(async (req) => {
   const adminRoleId = cfg.adminRoleId;
   const staffRoleId = cfg.staffRoleId;
   const wlThreadChannelId = cfg.wlThreadChannelId;
-  const approvedRoleId = cfg.approvedRoleId;
 
   if (guildIdEnv && interaction.guild_id && interaction.guild_id !== guildIdEnv) {
     return interactionJson({
@@ -1152,46 +1235,6 @@ Deno.serve(async (req) => {
         type: 4,
         data: {
           content: `Formulário aberto! Vá até <#${result.threadId}> e responda as perguntas.`,
-          flags: 64,
-        },
-      });
-    }
-
-    if (customId === "beta_redeem_modal") {
-      const rows = interaction.data?.components ?? [];
-      let keyCode = "";
-      let gameCode = "";
-      for (const row of rows) {
-        for (const comp of row.components ?? []) {
-          if (comp.custom_id === "beta_key") keyCode = (comp.value ?? "").trim();
-          if (comp.custom_id === "beta_game_code") {
-            gameCode = (comp.value ?? "").trim();
-          }
-        }
-      }
-
-      const result = await redeemBetaInvite({
-        admin,
-        botToken,
-        guildId: interaction.guild_id ?? guildIdEnv ?? "",
-        approvedRoleId,
-        member: interaction.member,
-        keyCode,
-        gameCode,
-      });
-
-      if (!result.ok) {
-        return interactionJson({
-          type: 4,
-          data: { content: result.error, flags: 64 },
-        });
-      }
-
-      return interactionJson({
-        type: 4,
-        data: {
-          content:
-            "Acesso liberado. Sua key foi vinculada ao código do jogo. Entre no servidor.",
           flags: 64,
         },
       });

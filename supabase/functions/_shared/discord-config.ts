@@ -21,12 +21,13 @@ export type DiscordRuntimeConfig = {
 export const DEFAULT_BETA_ACCESS_CATEGORY_ID = "1534358251867607071";
 export const DEFAULT_TICKET_PANEL_CHANNEL_ID = "1534356212773032006";
 
+/** discord_runtime_config wins; DISCORD_* secrets only fill empty columns. */
 function pick(envKey: string, dbVal?: string | null) {
-  return (Deno.env.get(envKey) || dbVal || "").trim();
+  return (dbVal?.trim() || Deno.env.get(envKey) || "").trim();
 }
 
 /**
- * Site admin panel = Discord role from DISCORD_ADMIN_ROLE_ID (today: CS).
+ * Site admin panel = admin_role_id (fallback DISCORD_ADMIN_ROLE_ID; today: CS).
  * No match by role name.
  */
 export async function withCeoAdminRole(

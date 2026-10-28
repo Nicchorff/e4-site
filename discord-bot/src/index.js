@@ -13,6 +13,7 @@ import {
   botInviteUrl,
   ensureGuildSetup,
   loadDotEnv,
+  loadRuntimeConfig,
   persistRuntimeConfig,
   printEnvBlock,
   registerSlashCommand,
@@ -529,11 +530,14 @@ client.once(Events.ClientReady, async (c) => {
     )
   } else {
     try {
-      const ids = await ensureGuildSetup({
+      const saved = await loadRuntimeConfig(supabase)
+      const found = await ensureGuildSetup({
         rest: c.rest,
         guildId,
         botUserId: c.user.id,
+        saved,
       })
+      const ids = await persistRuntimeConfig(supabase, found)
       formChannelId = ids.formChannelId || formChannelId
       betaAccessChannelId = ids.betaAccessChannelId || betaAccessChannelId
       ticketPanelChannelId = ids.ticketPanelChannelId || ticketPanelChannelId
@@ -551,7 +555,6 @@ client.once(Events.ClientReady, async (c) => {
       }
       process.env.DISCORD_GUILD_ID = guildId
       printEnvBlock(ids)
-      await persistRuntimeConfig(supabase, ids)
       await registerSlashCommand(c.rest, c.user.id, guildId)
     } catch (err) {
       console.error('Guild setup failed', err?.message ?? err)
@@ -608,16 +611,18 @@ client.on(Events.MessageCreate, async (message) => {
     }
     await message.delete().catch(() => null)
     try {
-      const ids = await ensureGuildSetup({
+      const saved = await loadRuntimeConfig(supabase)
+      const found = await ensureGuildSetup({
         rest: client.rest,
         guildId,
         botUserId: client.user.id,
+        saved,
       })
+      const ids = await persistRuntimeConfig(supabase, found)
       formChannelId = ids.formChannelId
       betaAccessChannelId = ids.betaAccessChannelId || betaAccessChannelId
       ticketPanelChannelId = ids.ticketPanelChannelId || ticketPanelChannelId
       printEnvBlock(ids)
-      await persistRuntimeConfig(supabase, ids)
       await registerSlashCommand(client.rest, client.user.id, guildId)
       if (ids.formChannelId) {
         formChannelId = ids.formChannelId

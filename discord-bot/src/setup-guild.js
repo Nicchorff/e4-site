@@ -283,10 +283,43 @@ async function tryApplyTicketOverwrites(
   }
 }
 
+const ID_COLUMNS = {
+  guildId: 'guild_id',
+  adminRoleId: 'admin_role_id',
+  staffRoleId: 'staff_role_id',
+  interviewRoleId: 'interview_role_id',
+  approvedRoleId: 'approved_role_id',
+  categoryOpenId: 'category_open_id',
+  categoryInProgressId: 'category_in_progress_id',
+  categoryFinishedId: 'category_finished_id',
+  formChannelId: 'wl_form_channel_id',
+  threadChannelId: 'wl_thread_channel_id',
+  resultFormChannelId: 'wl_result_form_channel_id',
+  resultInterviewChannelId: 'wl_result_interview_channel_id',
+  betaAccessCategoryId: 'beta_access_category_id',
+  betaAccessChannelId: 'beta_access_channel_id',
+  ticketPanelChannelId: 'ticket_panel_channel_id',
+  inviteUrl: 'invite_url',
+}
+
+export async function loadRuntimeConfig(supabase) {
+  if (!supabase) return null
+  const { data, error } = await supabase
+    .from('discord_runtime_config')
+    .select('*')
+    .eq('id', 1)
+    .maybeSingle()
+  if (error) {
+    console.error('loadRuntimeConfig', error.message)
+    return null
+  }
+  return data
+}
+
 /**
- * @param {{ rest: import('discord.js').REST, guildId: string, botUserId: string }} opts
+ * @param {{ rest: import('discord.js').REST, guildId: string, botUserId: string, saved?: Record<string, string | null> | null }} opts
  */
-export async function ensureGuildSetup({ rest, guildId, botUserId }) {
+export async function ensureGuildSetup({ rest, guildId, botUserId, saved }) {
   const roles = /** @type {Array<{ id: string, name: string }>} */ (
     await rest.get(Routes.guildRoles(guildId))
   )
@@ -314,6 +347,11 @@ export async function ensureGuildSetup({ rest, guildId, botUserId }) {
   for (const spec of ROLE_SPECS) {
     if (spec.key === 'adminRoleId' && envAdmin) {
       ids.adminRoleId = envAdmin
+      continue
+    }
+    const savedId = String(saved?.[ID_COLUMNS[spec.key]] ?? '').trim()
+    if (savedId && roles.some((r) => r.id === savedId)) {
+      ids[spec.key] = savedId
       continue
     }
     const existing = findByName(roles, spec.name)
@@ -582,41 +620,62 @@ export async function registerSlashCommand(rest, applicationId, guildId) {
   }
 }
 
+/**
+ * Only fills empty columns: IDs saved in /admin/discord win over name matches.
+ * DISCORD_ADMIN_ROLE_ID still forces admin_role_id. Returns the merged ids.
+ */
 export async function persistRuntimeConfig(supabase, ids) {
-  if (!supabase) return
-  const { error } = await supabase.from('discord_runtime_config').upsert({
-    id: 1,
-    guild_id: ids.guildId,
-    admin_role_id: ids.adminRoleId,
-    staff_role_id: ids.staffRoleId,
-    category_open_id: ids.categoryOpenId,
-    category_in_progress_id: ids.categoryInProgressId,
-    category_finished_id: ids.categoryFinishedId,
-    wl_form_channel_id: ids.formChannelId,
-    wl_thread_channel_id: ids.threadChannelId,
-    wl_result_form_channel_id: ids.resultFormChannelId,
-    wl_result_interview_channel_id: ids.resultInterviewChannelId,
-    beta_access_category_id: ids.betaAccessCategoryId || null,
-    beta_access_channel_id: ids.betaAccessChannelId || null,
-    ticket_panel_channel_id: ids.ticketPanelChannelId || null,
-    interview_role_id: ids.interviewRoleId,
-    approved_role_id: ids.approvedRoleId,
-    invite_url: ids.inviteUrl || null,
-    updated_at: new Date().toISOString(),
-  })
-  if (error) {
-    console.error('persistRuntimeConfig', error.message)
-    return
+  if (!supabase) return ids
+  const saved = await loadRuntimeConfig(supabase)
+  const merged = { ...ids }
+  const row = { id: 1 }
+  for (const [key, column] of Object.entries(ID_COLUMNS)) {
+    const current = String(saved?.[column] ?? '').trim()
+    if (current) {
+      merged[key] = current
+    } else if (ids[key]) {
+      row[column] = ids[key]
+    }
   }
-  const viewer = [ids.adminRoleId, ids.staffRoleId].filter(Boolean)
-  const { error: viewerErr } = await supabase
-    .from('donation_ticket_settings')
-    .upsert({ id: 1, viewer_role_ids: viewer })
-  if (viewerErr) {
-    console.error('donation_ticket_settings', viewerErr.message)
+  const envAdmin = (process.env.DISCORD_ADMIN_ROLE_ID || '').trim()
+  if (envAdmin) {
+    merged.adminRoleId = envAdmin
+    if (saved?.admin_role_id !== envAdmin) row.admin_role_id = envAdmin
+  }
+
+  if (Object.keys(row).length > 1) {
+    row.updated_at = new Date().toISOString()
+    const { error } = await supabase.from('discord_runtime_config').upsert(row)
+    if (error) {
+      console.error('persistRuntimeConfig', error.message)
+      return merged
+    }
+    console.log(
+      `Filled empty discord_runtime_config columns: ${Object.keys(row)
+        .filter((c) => c !== 'id' && c !== 'updated_at')
+        .join(', ')}`,
+    )
   } else {
-    console.log('Saved Discord IDs to discord_runtime_config')
+    console.log('discord_runtime_config already complete; nothing overwritten')
   }
+
+  const { data: viewerRow, error: viewerReadErr } = await supabase
+    .from('donation_ticket_settings')
+    .select('viewer_role_ids')
+    .eq('id', 1)
+    .maybeSingle()
+  if (viewerReadErr) {
+    console.error('donation_ticket_settings', viewerReadErr.message)
+    return merged
+  }
+  if (!viewerRow?.viewer_role_ids?.length) {
+    const viewer = [merged.adminRoleId, merged.staffRoleId].filter(Boolean)
+    const { error: viewerErr } = await supabase
+      .from('donation_ticket_settings')
+      .upsert({ id: 1, viewer_role_ids: viewer })
+    if (viewerErr) console.error('donation_ticket_settings', viewerErr.message)
+  }
+  return merged
 }
 
 export function printEnvBlock(ids) {
@@ -686,20 +745,23 @@ async function main() {
     }
   }
 
-  const ids = await ensureGuildSetup({ rest, guildId, botUserId: me.id })
-  await registerSlashCommand(rest, me.id, guildId)
-  printEnvBlock(ids)
-
   const supabaseUrl = process.env.SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (supabaseUrl && serviceKey) {
-    const supabase = createClient(supabaseUrl, serviceKey)
-    await persistRuntimeConfig(supabase, ids)
+  const supabase =
+    supabaseUrl && serviceKey ? createClient(supabaseUrl, serviceKey) : null
+
+  const saved = await loadRuntimeConfig(supabase)
+  let ids = await ensureGuildSetup({ rest, guildId, botUserId: me.id, saved })
+  await registerSlashCommand(rest, me.id, guildId)
+
+  if (supabase) {
+    ids = await persistRuntimeConfig(supabase, ids)
   } else {
     console.warn(
       'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing — skipped DB persist',
     )
   }
+  printEnvBlock(ids)
 }
 
 const isCli = /setup-guild\.js$/i.test(process.argv[1] || '')
