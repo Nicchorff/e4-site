@@ -309,7 +309,13 @@ export async function ensureGuildSetup({ rest, guildId, botUserId }) {
     inviteUrl: '',
   }
 
+  const envAdmin = (process.env.DISCORD_ADMIN_ROLE_ID || '').trim()
+
   for (const spec of ROLE_SPECS) {
+    if (spec.key === 'adminRoleId' && envAdmin) {
+      ids.adminRoleId = envAdmin
+      continue
+    }
     const existing = findByName(roles, spec.name)
     if (existing) {
       ids[spec.key] = existing.id

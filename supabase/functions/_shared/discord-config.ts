@@ -25,31 +25,15 @@ function pick(envKey: string, dbVal?: string | null) {
   return (Deno.env.get(envKey) || dbVal || "").trim();
 }
 
-export async function resolveNamedRoleId(
-  botToken: string,
-  guildId: string,
-  names: string[],
-): Promise<string> {
-  if (!botToken || !guildId || names.length === 0) return "";
-  const res = await fetch(
-    `https://discord.com/api/v10/guilds/${guildId}/roles`,
-    { headers: { Authorization: `Bot ${botToken}` } },
-  );
-  if (!res.ok) return "";
-  const roles = (await res.json()) as { id: string; name: string }[];
-  const wanted = new Set(names.map((n) => n.toLowerCase()));
-  const hit = roles.find((r) => wanted.has(String(r.name).toLowerCase()));
-  return hit?.id ?? "";
-}
-
-/** Site admin panel = Discord role CEO (not the leftover "Admin" the bot created). */
+/**
+ * Site admin panel = Discord role from DISCORD_ADMIN_ROLE_ID (today: CS).
+ * No match by role name.
+ */
 export async function withCeoAdminRole(
   cfg: DiscordRuntimeConfig,
-  botToken: string,
+  _botToken: string,
 ): Promise<DiscordRuntimeConfig> {
-  const ceoId = await resolveNamedRoleId(botToken, cfg.guildId, ["CEO"]);
-  if (!ceoId) return cfg;
-  return { ...cfg, adminRoleId: ceoId };
+  return cfg;
 }
 
 export async function loadDiscordRuntimeConfig(

@@ -40,7 +40,7 @@ No Dashboard → Edge Functions → Secrets:
 |---|---|
 | `DISCORD_BOT_TOKEN` | Token do bot E4 (leitura de membros) |
 | `DISCORD_GUILD_ID` | ID do servidor (opcional se o bot já gravou `discord_runtime_config`) |
-| `DISCORD_ADMIN_ROLE_ID` | Cargo → `role = admin` (idem) |
+| `DISCORD_ADMIN_ROLE_ID` | Cargo → `role = admin` (idem). Hoje CS `1534368430155763862`; admin vem só deste ID, sem match por nome |
 | `DISCORD_STAFF_ROLE_ID` | Cargo → `role = staff` (idem) |
 
 Troca de servidor: convide o bot existente, rode `npm run setup-guild` em `discord-bot/` (ou suba o app no EasyPanel). O bot cria cargos/canais e grava os IDs. Deploy EasyPanel: [docs/deploy-easypanel.md](docs/deploy-easypanel.md) (`docker-compose.easypanel.yml`).
@@ -85,7 +85,7 @@ Cole estes valores quando tiver as chaves (compra real não funciona sem eles):
 |---|---|
 | `DISCORD_BOT_TOKEN` | Sync de cargos + tickets |
 | `DISCORD_GUILD_ID` | Servidor Discord |
-| `DISCORD_ADMIN_ROLE_ID` / `DISCORD_STAFF_ROLE_ID` | `profiles.role` + moderar tickets |
+| `DISCORD_ADMIN_ROLE_ID` / `DISCORD_STAFF_ROLE_ID` | `profiles.role` + moderar tickets. Admin só pelo ID (hoje CS `1534368430155763862`) |
 | `DISCORD_PUBLIC_KEY` | Verificar Interactions Endpoint |
 | `DISCORD_CATEGORY_OPEN_ID` / `_IN_PROGRESS_ID` / `_FINISHED_ID` | Categorias dos tickets |
 | `STRIPE_SECRET_KEY` | (opcional agora) Checkout Session |
