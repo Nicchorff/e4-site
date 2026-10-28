@@ -642,6 +642,11 @@ export async function persistRuntimeConfig(supabase, ids) {
     merged.adminRoleId = envAdmin
     if (saved?.admin_role_id !== envAdmin) row.admin_role_id = envAdmin
   }
+  // Sem WL comes from Discord Onboarding: never created or matched by name.
+  const envPending = (process.env.DISCORD_PENDING_ROLE_ID || '').trim()
+  if (envPending && !String(saved?.pending_role_id ?? '').trim()) {
+    row.pending_role_id = envPending
+  }
 
   if (Object.keys(row).length > 1) {
     row.updated_at = new Date().toISOString()

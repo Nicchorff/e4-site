@@ -5,6 +5,12 @@ export const DISCORD_CONFIG_FIELDS = [
   { key: 'staff_role_id', label: 'Cargo staff', group: 'roles' },
   { key: 'interview_role_id', label: 'Cargo entrevista (pós formulário WL)', group: 'roles' },
   { key: 'approved_role_id', label: 'Cargo aprovado (entrevista e beta)', group: 'roles' },
+  {
+    key: 'pending_role_id',
+    label: 'Cargo Sem WL (onboarding)',
+    group: 'roles',
+    hint: 'Ao dar Aprovado (beta ou entrevista), este cargo é removido do membro.',
+  },
   { key: 'guild_id', label: 'Servidor (guild)', group: 'channels' },
   { key: 'category_open_id', label: 'Categoria Ticket | Aberto', group: 'channels' },
   { key: 'category_in_progress_id', label: 'Categoria Ticket | Em andamento', group: 'channels' },

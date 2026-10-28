@@ -502,6 +502,7 @@ async function redeemBetaInvite(opts: {
   botToken: string;
   guildId: string;
   approvedRoleId: string;
+  pendingRoleId: string;
   member: InteractionMember | undefined;
   keyCode: string;
   gameCode: string;
@@ -639,6 +640,17 @@ async function redeemBetaInvite(opts: {
       roleAssigned = true;
     } catch (err) {
       console.error("add approved role failed", err);
+    }
+    if (roleAssigned && opts.pendingRoleId) {
+      try {
+        await discordApi(
+          opts.botToken,
+          "DELETE",
+          `/guilds/${opts.guildId}/members/${user.id}/roles/${opts.pendingRoleId}`,
+        );
+      } catch (err) {
+        console.error("remove pending role failed", err);
+      }
     }
   } else {
     console.error("approved role or guild missing for beta redeem");
@@ -1154,6 +1166,7 @@ Deno.serve(async (req) => {
             botToken,
             guildId: interaction.guild_id ?? cfg.guildId ?? "",
             approvedRoleId: cfg.approvedRoleId,
+            pendingRoleId: cfg.pendingRoleId,
             member: interaction.member,
             keyCode,
             gameCode,

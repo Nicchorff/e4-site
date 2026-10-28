@@ -273,6 +273,9 @@ Deno.serve(async (req) => {
 
       await addRole(botToken, guildId, app.discord_id, approvedRoleId);
       await removeRole(botToken, guildId, app.discord_id, interviewRoleId);
+      if (cfg.pendingRoleId) {
+        await removeRole(botToken, guildId, app.discord_id, cfg.pendingRoleId);
+      }
 
       await admin
         .from("whitelist_applications")

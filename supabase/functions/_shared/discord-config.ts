@@ -13,6 +13,7 @@ export type DiscordRuntimeConfig = {
   wlResultInterviewChannelId: string;
   interviewRoleId: string;
   approvedRoleId: string;
+  pendingRoleId: string;
   betaAccessCategoryId: string;
   betaAccessChannelId: string;
   ticketPanelChannelId: string;
@@ -80,6 +81,7 @@ export async function loadDiscordRuntimeConfig(
       data?.interview_role_id,
     ),
     approvedRoleId: pick("DISCORD_WL_APPROVED_ROLE_ID", data?.approved_role_id),
+    pendingRoleId: pick("DISCORD_PENDING_ROLE_ID", data?.pending_role_id),
     betaAccessCategoryId:
       pick("DISCORD_BETA_ACCESS_CATEGORY_ID", data?.beta_access_category_id) ||
       DEFAULT_BETA_ACCESS_CATEGORY_ID,

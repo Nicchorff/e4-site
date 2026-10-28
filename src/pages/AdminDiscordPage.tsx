@@ -145,6 +145,11 @@ export function AdminDiscordPage() {
                         }
                         className="border-e4-gold-deep/40 bg-e4-black font-mono text-sm text-e4-white"
                       />
+                      {'hint' in field && (
+                        <span className="block text-xs text-e4-silver">
+                          {field.hint}
+                        </span>
+                      )}
                       {invalid && (
                         <span className="block text-xs text-e4-dusk">
                           Use só dígitos (17 a 20).
